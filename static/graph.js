@@ -3,6 +3,10 @@ const NODE_RADIUS = 22;
 const PADDING = 40;
 const MIN_EDGE_WIDTH = 1;
 const MAX_EDGE_WIDTH = 6;
+const REPULSION_STRENGTH = 1200;
+const SPRING_STRENGTH = 0.02;
+const SPRING_REST_LENGTH = 90;
+const DAMPING = 0.85;
 
 class ChainGraph {
   constructor(svgEl, tooltipEl) {
@@ -16,6 +20,9 @@ class ChainGraph {
     this.nodeEls = new Map();
     this.edgeEls = new Map();
     this._nextId = 1;
+    this.dragNode = null;
+    this._tick = this._tick.bind(this);
+    requestAnimationFrame(this._tick);
   }
 
   reset(startWord, targetWord) {
@@ -80,6 +87,8 @@ class ChainGraph {
       word,
       x,
       y,
+      vx: 0,
+      vy: 0,
       pinned,
       isDigression: false,
       neighborSimilarity: null,
@@ -150,5 +159,65 @@ class ChainGraph {
     for (const edge of this.edges) {
       this._renderEdge(edge);
     }
+  }
+
+  _tick() {
+    this._applyForces();
+    this._render();
+    requestAnimationFrame(this._tick);
+  }
+
+  _applyForces() {
+    for (const node of this.nodes) {
+      if (node.pinned || node === this.dragNode) continue;
+
+      let fx = 0;
+      let fy = 0;
+
+      for (const other of this.nodes) {
+        if (other === node) continue;
+        let dx = node.x - other.x;
+        let dy = node.y - other.y;
+        let distSq = dx * dx + dy * dy;
+        if (distSq < 1) distSq = 1;
+        const dist = Math.sqrt(distSq);
+        const force = REPULSION_STRENGTH / distSq;
+        fx += (dx / dist) * force;
+        fy += (dy / dist) * force;
+      }
+
+      for (const edge of this.edges) {
+        if (edge.similarity < this.threshold) continue;
+        let otherId = null;
+        if (edge.aId === node.id) otherId = edge.bId;
+        else if (edge.bId === node.id) otherId = edge.aId;
+        else continue;
+        const other = this._nodeById(otherId);
+        if (!other) continue;
+
+        const dx = other.x - node.x;
+        const dy = other.y - node.y;
+        const dist = Math.max(Math.sqrt(dx * dx + dy * dy), 1);
+        const displacement = dist - SPRING_REST_LENGTH;
+        const force = SPRING_STRENGTH * displacement;
+        fx += (dx / dist) * force;
+        fy += (dy / dist) * force;
+      }
+
+      node.vx = (node.vx + fx) * DAMPING;
+      node.vy = (node.vy + fy) * DAMPING;
+      node.x += node.vx;
+      node.y += node.vy;
+      node.x = Math.max(NODE_RADIUS, Math.min(this.width - NODE_RADIUS, node.x));
+      node.y = Math.max(NODE_RADIUS, Math.min(this.height - NODE_RADIUS, node.y));
+    }
+  }
+
+  _render() {
+    for (const node of this.nodes) {
+      const els = this.nodeEls.get(node.id);
+      if (els) els.g.setAttribute("transform", `translate(${node.x}, ${node.y})`);
+    }
+    this._renderEdges();
   }
 }
