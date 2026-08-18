@@ -1,0 +1,132 @@
+const SVG_NS = "http://www.w3.org/2000/svg";
+const NODE_RADIUS = 22;
+const PADDING = 40;
+const MIN_EDGE_WIDTH = 1;
+const MAX_EDGE_WIDTH = 6;
+
+class ChainGraph {
+  constructor(svgEl, tooltipEl) {
+    this.svg = svgEl;
+    this.tooltip = tooltipEl;
+    this.width = Number(svgEl.getAttribute("width"));
+    this.height = Number(svgEl.getAttribute("height"));
+    this.threshold = 0.15;
+    this.nodes = [];
+    this.edges = [];
+    this.nodeEls = new Map();
+    this.edgeEls = new Map();
+    this._nextId = 1;
+  }
+
+  reset(startWord, targetWord) {
+    this.svg.innerHTML = "";
+    this.nodeEls.clear();
+    this.edgeEls.clear();
+    this._nextId = 1;
+    this.nodes = [
+      this._makeNode(startWord, PADDING, this.height / 2, true),
+      this._makeNode(targetWord, this.width - PADDING, this.height / 2, true),
+    ];
+    this.edges = [];
+    for (const node of this.nodes) {
+      this._createNodeEl(node);
+    }
+  }
+
+  addStep(step) {
+    const prevNode = this.nodes[this.nodes.length - 2];
+    const rawX = prevNode.x + (Math.random() - 0.5) * 60;
+    const rawY = prevNode.y + (Math.random() - 0.5) * 60;
+    const x = Math.max(NODE_RADIUS, Math.min(this.width - NODE_RADIUS, rawX));
+    const y = Math.max(NODE_RADIUS, Math.min(this.height - NODE_RADIUS, rawY));
+
+    const node = this._makeNode(step.word, x, y, false);
+    node.neighborSimilarity = step.neighbor_similarity;
+    node.targetSimilarity = step.target_similarity;
+    node.isDigression = step.is_digression;
+
+    this.nodes.splice(this.nodes.length - 1, 0, node);
+    const edge = { aId: prevNode.id, bId: node.id, similarity: step.neighbor_similarity };
+    this.edges.push(edge);
+
+    this._createNodeEl(node);
+    this._createEdgeEl(edge);
+  }
+
+  setThreshold(value) {
+    this.threshold = value;
+    this._renderEdges();
+  }
+
+  _makeNode(word, x, y, pinned) {
+    return {
+      id: this._nextId++,
+      word,
+      x,
+      y,
+      pinned,
+      isDigression: false,
+      neighborSimilarity: null,
+      targetSimilarity: null,
+    };
+  }
+
+  _nodeById(id) {
+    return this.nodes.find((n) => n.id === id);
+  }
+
+  _createNodeEl(node) {
+    const g = document.createElementNS(SVG_NS, "g");
+    g.classList.add("node");
+    g.dataset.nodeId = String(node.id);
+    g.setAttribute("transform", `translate(${node.x}, ${node.y})`);
+
+    const circle = document.createElementNS(SVG_NS, "circle");
+    circle.setAttribute("r", NODE_RADIUS);
+    if (node.pinned) circle.classList.add("node-pinned");
+    if (node.isDigression) circle.classList.add("node-digression");
+    g.appendChild(circle);
+
+    const text = document.createElementNS(SVG_NS, "text");
+    text.textContent = node.word;
+    text.setAttribute("text-anchor", "middle");
+    text.setAttribute("dy", "0.35em");
+    g.appendChild(text);
+
+    this.svg.appendChild(g);
+    this.nodeEls.set(node.id, { g, circle, text });
+  }
+
+  _createEdgeEl(edge) {
+    const line = document.createElementNS(SVG_NS, "line");
+    line.classList.add("edge");
+    this.svg.insertBefore(line, this.svg.firstChild);
+    this.edgeEls.set(edge, line);
+    this._renderEdge(edge);
+  }
+
+  _renderEdge(edge) {
+    const line = this.edgeEls.get(edge);
+    const a = this._nodeById(edge.aId);
+    const b = this._nodeById(edge.bId);
+    if (!line || !a || !b) return;
+
+    const visible = edge.similarity >= this.threshold;
+    line.style.display = visible ? "" : "none";
+    if (!visible) return;
+
+    line.setAttribute("x1", a.x);
+    line.setAttribute("y1", a.y);
+    line.setAttribute("x2", b.x);
+    line.setAttribute("y2", b.y);
+    const width = MIN_EDGE_WIDTH + edge.similarity * (MAX_EDGE_WIDTH - MIN_EDGE_WIDTH);
+    line.setAttribute("stroke-width", width.toFixed(2));
+    line.style.opacity = Math.max(0.25, edge.similarity).toFixed(2);
+  }
+
+  _renderEdges() {
+    for (const edge of this.edges) {
+      this._renderEdge(edge);
+    }
+  }
+}

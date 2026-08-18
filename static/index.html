@@ -17,7 +17,11 @@
 
   <section id="game" hidden>
     <p>Connect <strong id="start-word"></strong> to <strong id="target-word"></strong></p>
-    <ol id="chain-list"></ol>
+    <div id="graph-controls">
+      <label for="threshold-slider">Connection threshold: <span id="threshold-value">0.15</span></label>
+      <input type="range" id="threshold-slider" min="0" max="1" step="0.01" value="0.15">
+    </div>
+    <svg id="chain-graph" viewBox="0 0 600 300" width="600" height="300"></svg>
     <input id="word-input" placeholder="next word">
     <button id="add-word-btn">Add word</button>
     <button id="restart-btn">Restart</button>
@@ -26,6 +30,9 @@
     <p id="status"></p>
   </section>
 
+  <div id="graph-tooltip" hidden></div>
+
+  <script src="/graph.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>

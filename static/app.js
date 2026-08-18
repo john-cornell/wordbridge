@@ -2,9 +2,13 @@ const setupSection = document.getElementById("setup");
 const gameSection = document.getElementById("game");
 const startWordEl = document.getElementById("start-word");
 const targetWordEl = document.getElementById("target-word");
-const chainList = document.getElementById("chain-list");
 const scoreEl = document.getElementById("score");
 const statusEl = document.getElementById("status");
+
+const chainGraph = new ChainGraph(
+  document.getElementById("chain-graph"),
+  document.getElementById("graph-tooltip")
+);
 
 async function postJSON(url, body) {
   const response = await fetch(url, {
@@ -22,7 +26,7 @@ async function postJSON(url, body) {
 function showGame(startWord, targetWord) {
   startWordEl.textContent = startWord;
   targetWordEl.textContent = targetWord;
-  chainList.innerHTML = "";
+  chainGraph.reset(startWord, targetWord);
   scoreEl.textContent = "";
   statusEl.textContent = "";
   document.getElementById("word-input").disabled = false;
@@ -56,9 +60,7 @@ document.getElementById("add-word-btn").addEventListener("click", async () => {
   const word = input.value.trim();
   try {
     const data = await postJSON("/api/game/word", { word });
-    const li = document.createElement("li");
-    li.textContent = `${data.word} (neighbor: ${data.neighbor_similarity.toFixed(2)}, target: ${data.target_similarity.toFixed(2)})${data.is_digression ? " ⚠ digression" : ""}`;
-    chainList.appendChild(li);
+    chainGraph.addStep(data);
     scoreEl.textContent = `Score: ${data.score}`;
     input.value = "";
 

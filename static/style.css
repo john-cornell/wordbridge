@@ -5,10 +5,55 @@ body {
   padding: 0 1rem;
 }
 
-#chain-list li {
-  margin-bottom: 0.25rem;
-}
-
 #status {
   font-weight: bold;
+}
+
+#graph-controls {
+  margin: 0.5rem 0;
+}
+
+#chain-graph {
+  border: 1px solid #ccc;
+  background: #fafafa;
+}
+
+.node circle {
+  fill: #4a90d9;
+  stroke: #2c5f8a;
+  stroke-width: 1.5;
+  cursor: grab;
+}
+
+.node circle.node-pinned {
+  fill: #444;
+  stroke: #222;
+  cursor: default;
+}
+
+.node circle.node-digression {
+  fill: #e08a2b;
+  stroke: #a05e10;
+}
+
+.node text {
+  font-size: 12px;
+  fill: #fff;
+  pointer-events: none;
+  user-select: none;
+}
+
+.edge {
+  stroke: #888;
+}
+
+#graph-tooltip {
+  position: fixed;
+  background: #222;
+  color: #fff;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  pointer-events: none;
+  z-index: 10;
 }
