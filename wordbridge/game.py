@@ -7,6 +7,7 @@ class Step:
     neighbor_similarity: float
     target_similarity: float
     is_digression: bool
+    similarities: list
 
 
 class Chain:
@@ -34,7 +35,13 @@ class Chain:
         target_similarity = self._model.similarity(word, self.target_word)
         is_digression = target_similarity < previous_target_similarity
 
-        step = Step(word, neighbor_similarity, target_similarity, is_digression)
+        other_words = [self.start_word, self.target_word] + [s.word for s in self.steps]
+        similarities = [
+            {"word": other, "similarity": self._model.similarity(word, other)}
+            for other in other_words
+        ]
+
+        step = Step(word, neighbor_similarity, target_similarity, is_digression, similarities)
         self.steps.append(step)
         return step
 
@@ -70,6 +77,7 @@ class Chain:
                     "neighbor_similarity": step.neighbor_similarity,
                     "target_similarity": step.target_similarity,
                     "is_digression": step.is_digression,
+                    "similarities": step.similarities,
                 }
                 for step in self.steps
             ],

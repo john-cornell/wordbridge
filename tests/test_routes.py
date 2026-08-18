@@ -90,3 +90,17 @@ def test_add_word_with_non_dict_json_body_does_not_500(client):
         "/api/game/word", data='"hello"', content_type="application/json"
     )
     assert response.status_code < 500
+
+
+def test_add_word_response_includes_similarities_to_other_chain_words(client):
+    client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
+    response1 = client.post("/api/game/word", json={"word": "dog"})
+    # First call should still be in progress
+    assert response1.status_code == 200
+    response2 = client.post("/api/game/word", json={"word": "car"})
+    data = response2.get_json()
+
+    # The second word should have similarities to cat, auto, and dog
+    assert "similarities" in data
+    words_compared = {entry["word"] for entry in data["similarities"]}
+    assert words_compared == {"cat", "auto", "dog"}

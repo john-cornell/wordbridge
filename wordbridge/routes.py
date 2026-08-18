@@ -87,6 +87,7 @@ def add_word():
         neighbor_similarity=step.neighbor_similarity,
         target_similarity=step.target_similarity,
         is_digression=step.is_digression,
+        similarities=step.similarities,
         score=chain.score(),
         won=won,
         over_soft_cap=chain.is_over_soft_cap(),

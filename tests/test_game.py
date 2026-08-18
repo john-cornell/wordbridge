@@ -88,3 +88,22 @@ def test_restart_resets_completed_flag(tiny_model):
     chain.mark_completed()
     chain.restart()
     assert chain.completed is False
+
+
+def test_add_word_records_similarities_to_every_other_word(tiny_model):
+    chain = Chain(tiny_model, start_word="cat", target_word="auto", threshold=0.99)
+    chain.add_word("car")
+    step = chain.add_word("dog")
+
+    similarities_by_word = {entry["word"]: entry["similarity"] for entry in step.similarities}
+    assert similarities_by_word["cat"] == pytest.approx(tiny_model.similarity("dog", "cat"))
+    assert similarities_by_word["auto"] == pytest.approx(tiny_model.similarity("dog", "auto"))
+    assert similarities_by_word["car"] == pytest.approx(tiny_model.similarity("dog", "car"))
+    assert len(step.similarities) == 3
+
+
+def test_first_word_similarities_cover_only_start_and_target(tiny_model):
+    chain = Chain(tiny_model, start_word="cat", target_word="auto")
+    step = chain.add_word("car")
+    words_compared = {entry["word"] for entry in step.similarities}
+    assert words_compared == {"cat", "auto"}
