@@ -30,8 +30,12 @@ function showGame(startWord, targetWord) {
 }
 
 document.getElementById("random-btn").addEventListener("click", async () => {
-  const data = await postJSON("/api/game/new", { mode: "random" });
-  showGame(data.start_word, data.target_word);
+  try {
+    const data = await postJSON("/api/game/new", { mode: "random" });
+    showGame(data.start_word, data.target_word);
+  } catch (err) {
+    statusEl.textContent = err.message;
+  }
 });
 
 document.getElementById("manual-btn").addEventListener("click", async () => {
@@ -69,6 +73,10 @@ document.getElementById("add-word-btn").addEventListener("click", async () => {
 });
 
 document.getElementById("restart-btn").addEventListener("click", async () => {
-  const data = await postJSON("/api/game/restart");
-  showGame(data.start_word, data.target_word);
+  try {
+    const data = await postJSON("/api/game/restart");
+    showGame(data.start_word, data.target_word);
+  } catch (err) {
+    statusEl.textContent = err.message;
+  }
 });
