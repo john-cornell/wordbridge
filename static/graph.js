@@ -35,6 +35,22 @@ class ChainGraph {
 
   addStep(step) {
     const prevNode = this.nodes[this.nodes.length - 2];
+    const targetNode = this.nodes[this.nodes.length - 1];
+
+    if (step.word === targetNode.word) {
+      // The player's word IS the pinned target: connect into the existing
+      // target node instead of creating a duplicate.
+      targetNode.neighborSimilarity = step.neighbor_similarity;
+      targetNode.targetSimilarity = step.target_similarity;
+      targetNode.isDigression = step.is_digression;
+      this._updateNodeAppearance(targetNode);
+
+      const edge = { aId: prevNode.id, bId: targetNode.id, similarity: step.neighbor_similarity };
+      this.edges.push(edge);
+      this._createEdgeEl(edge);
+      return;
+    }
+
     const rawX = prevNode.x + (Math.random() - 0.5) * 60;
     const rawY = prevNode.y + (Math.random() - 0.5) * 60;
     const x = Math.max(NODE_RADIUS, Math.min(this.width - NODE_RADIUS, rawX));
@@ -84,7 +100,6 @@ class ChainGraph {
     const circle = document.createElementNS(SVG_NS, "circle");
     circle.setAttribute("r", NODE_RADIUS);
     if (node.pinned) circle.classList.add("node-pinned");
-    if (node.isDigression) circle.classList.add("node-digression");
     g.appendChild(circle);
 
     const text = document.createElementNS(SVG_NS, "text");
@@ -95,6 +110,13 @@ class ChainGraph {
 
     this.svg.appendChild(g);
     this.nodeEls.set(node.id, { g, circle, text });
+    this._updateNodeAppearance(node);
+  }
+
+  _updateNodeAppearance(node) {
+    const els = this.nodeEls.get(node.id);
+    if (!els) return;
+    els.circle.classList.toggle("node-digression", node.isDigression);
   }
 
   _createEdgeEl(edge) {
