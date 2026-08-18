@@ -30,6 +30,8 @@ def health():
 def new_game():
     model = _get_model()
     payload = request.get_json(force=True) or {}
+    if not isinstance(payload, dict):
+        payload = {}
     mode = payload.get("mode", "random")
 
     if mode == "manual":
@@ -56,7 +58,13 @@ def add_word():
         return jsonify(error="No game in progress"), 400
 
     chain = Chain.from_dict(model, session["chain"])
+
+    if chain.completed:
+        return jsonify(error="This game is already complete — start a new game."), 400
+
     payload = request.get_json(force=True) or {}
+    if not isinstance(payload, dict):
+        payload = {}
     word = payload.get("word", "").strip().lower()
 
     try:
@@ -64,11 +72,15 @@ def add_word():
     except ValueError as exc:
         return jsonify(error=str(exc)), 400
 
-    session["chain"] = chain.to_dict()
-
+    # chain.completed is guaranteed False here (an already-completed chain
+    # returns 400 above, before add_word is ever called), so this is the
+    # first time this chain has met the win condition.
     won = chain.is_won()
     if won:
         save_attempt(_get_db_conn(), chain)
+        chain.mark_completed()
+
+    session["chain"] = chain.to_dict()
 
     return jsonify(
         word=step.word,

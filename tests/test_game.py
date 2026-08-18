@@ -51,3 +51,40 @@ def test_restart_clears_steps(tiny_model):
     chain.add_word("car")
     chain.restart()
     assert chain.steps == []
+
+
+def test_chain_starts_not_completed(tiny_model):
+    chain = Chain(tiny_model, start_word="cat", target_word="auto")
+    assert chain.completed is False
+
+
+def test_mark_completed_sets_completed_flag(tiny_model):
+    chain = Chain(tiny_model, start_word="cat", target_word="auto")
+    chain.mark_completed()
+    assert chain.completed is True
+
+
+def test_completed_round_trips_through_to_dict_and_from_dict(tiny_model):
+    chain = Chain(tiny_model, start_word="cat", target_word="auto")
+    chain.add_word("car")
+    chain.mark_completed()
+
+    restored = Chain.from_dict(tiny_model, chain.to_dict())
+
+    assert restored.completed is True
+
+
+def test_not_completed_round_trips_through_to_dict_and_from_dict(tiny_model):
+    chain = Chain(tiny_model, start_word="cat", target_word="auto")
+    chain.add_word("car")
+
+    restored = Chain.from_dict(tiny_model, chain.to_dict())
+
+    assert restored.completed is False
+
+
+def test_restart_resets_completed_flag(tiny_model):
+    chain = Chain(tiny_model, start_word="cat", target_word="auto")
+    chain.mark_completed()
+    chain.restart()
+    assert chain.completed is False

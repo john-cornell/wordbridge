@@ -25,6 +25,8 @@ function showGame(startWord, targetWord) {
   chainList.innerHTML = "";
   scoreEl.textContent = "";
   statusEl.textContent = "";
+  document.getElementById("word-input").disabled = false;
+  document.getElementById("add-word-btn").disabled = false;
   setupSection.hidden = true;
   gameSection.hidden = false;
 }
@@ -62,6 +64,8 @@ document.getElementById("add-word-btn").addEventListener("click", async () => {
 
     if (data.won) {
       statusEl.textContent = "You connected the words!";
+      document.getElementById("word-input").disabled = true;
+      document.getElementById("add-word-btn").disabled = true;
     } else if (data.over_soft_cap) {
       statusEl.textContent = "Chain is getting long — score is dropping fast.";
     } else {
@@ -79,4 +83,9 @@ document.getElementById("restart-btn").addEventListener("click", async () => {
   } catch (err) {
     statusEl.textContent = err.message;
   }
+});
+
+document.getElementById("new-game-btn").addEventListener("click", () => {
+  setupSection.hidden = false;
+  gameSection.hidden = true;
 });

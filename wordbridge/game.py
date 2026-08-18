@@ -17,6 +17,7 @@ class Chain:
         self.threshold = threshold
         self.soft_cap = soft_cap
         self.steps = []
+        self.completed = False
 
     def add_word(self, word):
         if not self._model.contains(word):
@@ -51,6 +52,10 @@ class Chain:
 
     def restart(self):
         self.steps = []
+        self.completed = False
+
+    def mark_completed(self):
+        self.completed = True
 
     def to_dict(self):
         return {
@@ -58,6 +63,7 @@ class Chain:
             "target_word": self.target_word,
             "threshold": self.threshold,
             "soft_cap": self.soft_cap,
+            "completed": self.completed,
             "steps": [
                 {
                     "word": step.word,
@@ -79,4 +85,5 @@ class Chain:
             soft_cap=data["soft_cap"],
         )
         chain.steps = [Step(**step) for step in data["steps"]]
+        chain.completed = data.get("completed", False)
         return chain
