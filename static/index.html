@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Wordbridge</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <h1>Wordbridge</h1>
+
+  <section id="setup">
+    <button id="random-btn">Random pair</button>
+    <input id="word1-input" placeholder="start word">
+    <input id="word2-input" placeholder="target word">
+    <button id="manual-btn">Use these words</button>
+  </section>
+
+  <section id="game" hidden>
+    <p>Connect <strong id="start-word"></strong> to <strong id="target-word"></strong></p>
+    <ol id="chain-list"></ol>
+    <input id="word-input" placeholder="next word">
+    <button id="add-word-btn">Add word</button>
+    <button id="restart-btn">Restart</button>
+    <p id="score"></p>
+    <p id="status"></p>
+  </section>
+
+  <script src="/app.js"></script>
+</body>
+</html>

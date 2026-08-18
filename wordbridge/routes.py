@@ -16,6 +16,11 @@ def _get_db_conn():
     return current_app.config["_db_conn"]
 
 
+@bp.get("/")
+def index():
+    return current_app.send_static_file("index.html")
+
+
 @bp.get("/api/health")
 def health():
     return jsonify(status="ok")
