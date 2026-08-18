@@ -23,6 +23,10 @@ class ChainGraph {
     this.dragNode = null;
     this._tick = this._tick.bind(this);
     requestAnimationFrame(this._tick);
+
+    this.svg.addEventListener("mousedown", (evt) => this._onMouseDown(evt));
+    this.svg.addEventListener("mousemove", (evt) => this._onMouseMove(evt));
+    window.addEventListener("mouseup", () => this._onMouseUp());
   }
 
   reset(startWord, targetWord) {
@@ -100,6 +104,36 @@ class ChainGraph {
     return this.nodes.find((n) => n.id === id);
   }
 
+  _svgPoint(evt) {
+    const pt = this.svg.createSVGPoint();
+    pt.x = evt.clientX;
+    pt.y = evt.clientY;
+    const screenCTM = this.svg.getScreenCTM();
+    return pt.matrixTransform(screenCTM.inverse());
+  }
+
+  _onMouseDown(evt) {
+    const g = evt.target.closest(".node");
+    if (!g) return;
+    const nodeId = Number(g.dataset.nodeId);
+    const node = this._nodeById(nodeId);
+    if (!node || node.pinned) return;
+    this.dragNode = node;
+  }
+
+  _onMouseMove(evt) {
+    if (!this.dragNode) return;
+    const pt = this._svgPoint(evt);
+    this.dragNode.x = Math.max(NODE_RADIUS, Math.min(this.width - NODE_RADIUS, pt.x));
+    this.dragNode.y = Math.max(NODE_RADIUS, Math.min(this.height - NODE_RADIUS, pt.y));
+    this.dragNode.vx = 0;
+    this.dragNode.vy = 0;
+  }
+
+  _onMouseUp() {
+    this.dragNode = null;
+  }
+
   _createNodeEl(node) {
     const g = document.createElementNS(SVG_NS, "g");
     g.classList.add("node");
@@ -117,6 +151,10 @@ class ChainGraph {
     text.setAttribute("dy", "0.35em");
     g.appendChild(text);
 
+    g.addEventListener("mouseenter", (evt) => this._showTooltip(node, evt));
+    g.addEventListener("mousemove", (evt) => this._positionTooltip(evt));
+    g.addEventListener("mouseleave", () => this._hideTooltip());
+
     this.svg.appendChild(g);
     this.nodeEls.set(node.id, { g, circle, text });
     this._updateNodeAppearance(node);
@@ -126,6 +164,24 @@ class ChainGraph {
     const els = this.nodeEls.get(node.id);
     if (!els) return;
     els.circle.classList.toggle("node-digression", node.isDigression);
+  }
+
+  _showTooltip(node, evt) {
+    const text = node.neighborSimilarity === null
+      ? node.word
+      : `${node.word} — neighbor: ${node.neighborSimilarity.toFixed(2)}, target: ${node.targetSimilarity.toFixed(2)}`;
+    this.tooltip.textContent = text;
+    this.tooltip.hidden = false;
+    this._positionTooltip(evt);
+  }
+
+  _positionTooltip(evt) {
+    this.tooltip.style.left = `${evt.clientX + 12}px`;
+    this.tooltip.style.top = `${evt.clientY + 12}px`;
+  }
+
+  _hideTooltip() {
+    this.tooltip.hidden = true;
   }
 
   _createEdgeEl(edge) {

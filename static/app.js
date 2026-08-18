@@ -10,6 +10,15 @@ const chainGraph = new ChainGraph(
   document.getElementById("graph-tooltip")
 );
 
+const thresholdSlider = document.getElementById("threshold-slider");
+const thresholdValueEl = document.getElementById("threshold-value");
+
+thresholdSlider.addEventListener("input", () => {
+  const value = Number(thresholdSlider.value);
+  thresholdValueEl.textContent = value.toFixed(2);
+  chainGraph.setThreshold(value);
+});
+
 async function postJSON(url, body) {
   const response = await fetch(url, {
     method: "POST",
