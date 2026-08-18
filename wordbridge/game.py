@@ -51,3 +51,32 @@ class Chain:
 
     def restart(self):
         self.steps = []
+
+    def to_dict(self):
+        return {
+            "start_word": self.start_word,
+            "target_word": self.target_word,
+            "threshold": self.threshold,
+            "soft_cap": self.soft_cap,
+            "steps": [
+                {
+                    "word": step.word,
+                    "neighbor_similarity": step.neighbor_similarity,
+                    "target_similarity": step.target_similarity,
+                    "is_digression": step.is_digression,
+                }
+                for step in self.steps
+            ],
+        }
+
+    @classmethod
+    def from_dict(cls, model, data):
+        chain = cls(
+            model,
+            start_word=data["start_word"],
+            target_word=data["target_word"],
+            threshold=data["threshold"],
+            soft_cap=data["soft_cap"],
+        )
+        chain.steps = [Step(**step) for step in data["steps"]]
+        return chain

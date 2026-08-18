@@ -7,8 +7,8 @@ from wordbridge.model import WordVectorModel
 
 
 @pytest.fixture
-def app():
-    return create_app()
+def app(tiny_model):
+    return create_app(vector_model=tiny_model, db_path=":memory:", secret_key="test-secret")
 
 
 @pytest.fixture
