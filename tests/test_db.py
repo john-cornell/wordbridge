@@ -1,3 +1,5 @@
+import threading
+
 from wordbridge.db import init_db, list_attempts, save_attempt
 from wordbridge.game import Chain
 
@@ -23,6 +25,24 @@ def test_save_and_list_attempt(tiny_model):
     assert attempts[0]["target_word"] == "auto"
     assert attempts[0]["chain"] == ["auto"]
     assert attempts[0]["score"] == chain.score()
+
+
+def test_connection_can_be_used_across_threads(tiny_model):
+    conn = init_db(":memory:")
+    chain = Chain(tiny_model, start_word="cat", target_word="auto", threshold=0.5)
+    chain.add_word("auto")
+
+    def save_from_background_thread():
+        save_attempt(conn, chain)
+
+    thread = threading.Thread(target=save_from_background_thread)
+    thread.start()
+    thread.join()
+
+    attempts = list_attempts(conn)
+    assert len(attempts) == 1
+    assert attempts[0]["start_word"] == "cat"
+    assert attempts[0]["target_word"] == "auto"
 
 
 def test_list_attempts_orders_most_recent_first(tiny_model):

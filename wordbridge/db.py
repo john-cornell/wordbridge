@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS attempts (
 
 
 def init_db(db_path):
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(db_path, check_same_thread=False)
     conn.execute(SCHEMA)
     conn.commit()
     return conn
