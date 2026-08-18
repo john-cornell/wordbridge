@@ -13,11 +13,14 @@ const chainGraph = new ChainGraph(
 const thresholdSlider = document.getElementById("threshold-slider");
 const thresholdValueEl = document.getElementById("threshold-value");
 
-thresholdSlider.addEventListener("input", () => {
+function applyThreshold() {
   const value = Number(thresholdSlider.value);
   thresholdValueEl.textContent = value.toFixed(2);
   chainGraph.setThreshold(value);
-});
+}
+
+thresholdSlider.addEventListener("input", applyThreshold);
+applyThreshold();
 
 async function postJSON(url, body) {
   const response = await fetch(url, {
