@@ -1,3 +1,6 @@
+import pytest
+
+
 def test_new_game_random_mode_returns_word_pair(client):
     response = client.post("/api/game/new", json={"mode": "random"})
     assert response.status_code == 200
@@ -162,3 +165,78 @@ def test_long_chain_does_not_overflow_session_cookie(client):
         session_cookie = client.get_cookie("session")
         assert session_cookie is not None
         assert len(session_cookie.value) < 4093
+
+
+def test_give_up_without_active_game_returns_error(client):
+    response = client.post("/api/game/give_up")
+    assert response.status_code == 400
+
+
+def test_give_up_with_zero_steps_returns_null_best(client):
+    client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
+    response = client.post("/api/game/give_up")
+    data = response.get_json()
+
+    assert response.status_code == 200
+    assert data["given_up"] is True
+    assert data["best_word"] is None
+    assert data["best_similarity"] is None
+
+
+def test_give_up_returns_best_word_and_similarity(client):
+    client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
+    client.post("/api/game/word", json={"word": "dog"})
+
+    response = client.post("/api/game/give_up")
+    data = response.get_json()
+
+    assert response.status_code == 200
+    assert data["best_word"] == "dog"
+    assert data["best_similarity"] == pytest.approx(0.1098, abs=0.001)
+
+
+def test_give_up_locks_chain_against_further_add_word(client):
+    client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
+    client.post("/api/game/word", json={"word": "dog"})
+    client.post("/api/game/give_up")
+
+    response = client.post("/api/game/word", json={"word": "cat"})
+
+    assert response.status_code == 400
+    assert response.get_json() == {
+        "error": "This game is already complete — start a new game."
+    }
+
+
+def test_give_up_on_already_won_chain_returns_400(client):
+    client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
+    client.post("/api/game/word", json={"word": "car"})  # wins immediately (sim ~0.99)
+
+    response = client.post("/api/game/give_up")
+
+    assert response.status_code == 400
+    assert response.get_json() == {
+        "error": "This game is already complete — start a new game."
+    }
+
+
+def test_give_up_does_not_persist_to_history(client):
+    client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
+    client.post("/api/game/word", json={"word": "dog"})
+    client.post("/api/game/give_up")
+
+    history_response = client.get("/api/history")
+    attempts = history_response.get_json()["attempts"]
+    assert attempts == []
+
+
+def test_restart_after_give_up_produces_fresh_playable_chain(client):
+    client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
+    client.post("/api/game/word", json={"word": "dog"})
+    client.post("/api/game/give_up")
+
+    restart_response = client.post("/api/game/restart")
+    assert restart_response.status_code == 200
+
+    add_response = client.post("/api/game/word", json={"word": "dog"})
+    assert add_response.status_code == 200

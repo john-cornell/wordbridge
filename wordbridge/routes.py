@@ -98,6 +98,28 @@ def add_word():
     )
 
 
+@bp.post("/api/game/give_up")
+def give_up():
+    model = _get_model()
+    if "chain" not in session:
+        return jsonify(error="No game in progress"), 400
+
+    chain = Chain.from_dict(model, session["chain"])
+
+    if chain.completed:
+        return jsonify(error="This game is already complete — start a new game."), 400
+
+    best_step = chain.best_step()
+    chain.mark_completed()
+    session["chain"] = chain.to_dict()
+
+    return jsonify(
+        given_up=True,
+        best_word=best_step.word if best_step else None,
+        best_similarity=best_step.target_similarity if best_step else None,
+    )
+
+
 @bp.post("/api/game/restart")
 def restart_game():
     model = _get_model()

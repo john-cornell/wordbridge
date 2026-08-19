@@ -48,6 +48,11 @@ class Chain:
     def start_target_similarity(self):
         return self._model.similarity(self.start_word, self.target_word)
 
+    def best_step(self):
+        if not self.steps:
+            return None
+        return max(self.steps, key=lambda step: step.target_similarity)
+
     def is_won(self):
         return bool(self.steps) and self.steps[-1].target_similarity >= self.threshold
 

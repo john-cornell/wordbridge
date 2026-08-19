@@ -114,3 +114,19 @@ def test_start_target_similarity_matches_model_similarity(tiny_model):
     assert chain.start_target_similarity() == pytest.approx(
         tiny_model.similarity("cat", "auto")
     )
+
+
+def test_best_step_returns_none_when_no_steps(tiny_model):
+    chain = Chain(tiny_model, start_word="cat", target_word="auto")
+    assert chain.best_step() is None
+
+
+def test_best_step_returns_step_with_highest_target_similarity(tiny_model):
+    chain = Chain(tiny_model, start_word="cat", target_word="auto", threshold=0.99)
+    chain.add_word("dog")  # target_similarity ~0.11 vs auto
+    chain.add_word("cat")  # target_similarity 0.0 vs auto - lower, must not win out
+    best = chain.best_step()
+    assert best.word == "dog"
+    assert best.target_similarity == pytest.approx(
+        tiny_model.similarity("dog", "auto")
+    )
