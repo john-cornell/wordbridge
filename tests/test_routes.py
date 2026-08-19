@@ -195,6 +195,16 @@ def test_give_up_returns_best_word_and_similarity(client):
     assert data["best_similarity"] == pytest.approx(0.1098, abs=0.001)
 
 
+def test_give_up_response_includes_route_to_target(client):
+    client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
+
+    response = client.post("/api/game/give_up")
+    data = response.get_json()
+
+    assert response.status_code == 200
+    assert data["route"] == ["auto"]
+
+
 def test_give_up_locks_chain_against_further_add_word(client):
     client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
     client.post("/api/game/word", json={"word": "dog"})

@@ -28,3 +28,13 @@ def test_random_pair_returns_two_distinct_filtered_words(tiny_model):
     assert word_a != word_b
     assert word_a in tiny_model._filtered_vocab
     assert word_b in tiny_model._filtered_vocab
+
+
+def test_find_route_returns_direct_route_when_target_is_nearest_neighbor(tiny_model):
+    route = tiny_model.find_route("cat", "dog")
+    assert route == ["dog"]
+
+
+def test_find_route_returns_none_when_no_route_found_within_hop_cap(tiny_model):
+    route = tiny_model.find_route("cat", "auto", max_hops=1, neighbors_per_hop=1, win_threshold=2.0)
+    assert route is None

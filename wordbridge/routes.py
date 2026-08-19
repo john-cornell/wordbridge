@@ -110,6 +110,8 @@ def give_up():
         return jsonify(error="This game is already complete — start a new game."), 400
 
     best_step = chain.best_step()
+    current_word = chain.steps[-1].word if chain.steps else chain.start_word
+    route = model.find_route(current_word, chain.target_word)
     chain.mark_completed()
     session["chain"] = chain.to_dict()
 
@@ -117,6 +119,7 @@ def give_up():
         given_up=True,
         best_word=best_step.word if best_step else None,
         best_similarity=best_step.target_similarity if best_step else None,
+        route=route,
     )
 
 
