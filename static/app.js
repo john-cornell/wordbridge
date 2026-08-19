@@ -90,6 +90,27 @@ document.getElementById("add-word-btn").addEventListener("click", async () => {
   }
 });
 
+document.getElementById("give-up-btn").addEventListener("click", async () => {
+  try {
+    const data = await postJSON("/api/game/give_up");
+    document.getElementById("word-input").disabled = true;
+    document.getElementById("add-word-btn").disabled = true;
+
+    let message;
+    if (data.best_word === null) {
+      message = "You gave up without trying any words.";
+    } else {
+      message = `You gave up. Your best was '${data.best_word}' at ${data.best_similarity.toFixed(2)} similarity to the target.`;
+    }
+    if (data.route) {
+      message += ` A possible route: ${data.route.join(" → ")}.`;
+    }
+    statusEl.textContent = message;
+  } catch (err) {
+    statusEl.textContent = err.message;
+  }
+});
+
 document.getElementById("restart-btn").addEventListener("click", async () => {
   try {
     const data = await postJSON("/api/game/restart");
