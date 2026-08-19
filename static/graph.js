@@ -34,7 +34,7 @@ class ChainGraph {
     window.addEventListener("mouseup", () => this._onMouseUp());
   }
 
-  reset(startWord, targetWord) {
+  reset(startWord, targetWord, startTargetSimilarity) {
     this.svg.innerHTML = "";
     this.nodeEls.clear();
     this.edgeEls.clear();
@@ -50,6 +50,12 @@ class ChainGraph {
 
     for (const node of this.nodes) {
       this._createNodeEl(node);
+    }
+
+    if (typeof startTargetSimilarity === "number") {
+      const edge = { aId: startNode.id, bId: targetNode.id, similarity: startTargetSimilarity };
+      this.edges.push(edge);
+      this._createEdgeEl(edge);
     }
   }
 
@@ -68,14 +74,16 @@ class ChainGraph {
     this.nodes.push(node);
     this._createNodeEl(node);
 
-    for (const entry of step.similarities) {
-      const otherIds = this._nodesByWord.get(entry.word) || [];
-      for (const otherId of otherIds) {
-        if (otherId === node.id) continue;
-        const edge = { aId: node.id, bId: otherId, similarity: entry.similarity };
-        this.edges.push(edge);
-        this._createEdgeEl(edge);
-      }
+    const used = new Map();
+    for (const entry of step.similarities || []) {
+      const ids = this._nodesByWord.get(entry.word) || [];
+      const k = used.get(entry.word) || 0;
+      used.set(entry.word, k + 1);
+      const otherId = ids[k];
+      if (otherId === undefined || otherId === node.id) continue;
+      const edge = { aId: node.id, bId: otherId, similarity: entry.similarity };
+      this.edges.push(edge);
+      this._createEdgeEl(edge);
     }
   }
 

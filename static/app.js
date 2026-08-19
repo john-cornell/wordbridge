@@ -35,10 +35,10 @@ async function postJSON(url, body) {
   return data;
 }
 
-function showGame(startWord, targetWord) {
+function showGame(startWord, targetWord, startTargetSimilarity) {
   startWordEl.textContent = startWord;
   targetWordEl.textContent = targetWord;
-  chainGraph.reset(startWord, targetWord);
+  chainGraph.reset(startWord, targetWord, startTargetSimilarity);
   scoreEl.textContent = "";
   statusEl.textContent = "";
   document.getElementById("word-input").disabled = false;
@@ -50,7 +50,7 @@ function showGame(startWord, targetWord) {
 document.getElementById("random-btn").addEventListener("click", async () => {
   try {
     const data = await postJSON("/api/game/new", { mode: "random" });
-    showGame(data.start_word, data.target_word);
+    showGame(data.start_word, data.target_word, data.start_target_similarity);
   } catch (err) {
     statusEl.textContent = err.message;
   }
@@ -61,7 +61,7 @@ document.getElementById("manual-btn").addEventListener("click", async () => {
   const word2 = document.getElementById("word2-input").value.trim();
   try {
     const data = await postJSON("/api/game/new", { mode: "manual", word1, word2 });
-    showGame(data.start_word, data.target_word);
+    showGame(data.start_word, data.target_word, data.start_target_similarity);
   } catch (err) {
     statusEl.textContent = err.message;
   }
@@ -93,7 +93,7 @@ document.getElementById("add-word-btn").addEventListener("click", async () => {
 document.getElementById("restart-btn").addEventListener("click", async () => {
   try {
     const data = await postJSON("/api/game/restart");
-    showGame(data.start_word, data.target_word);
+    showGame(data.start_word, data.target_word, data.start_target_similarity);
   } catch (err) {
     statusEl.textContent = err.message;
   }

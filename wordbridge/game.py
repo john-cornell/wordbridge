@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass
@@ -7,7 +7,7 @@ class Step:
     neighbor_similarity: float
     target_similarity: float
     is_digression: bool
-    similarities: list
+    similarities: list = field(default_factory=list)
 
 
 class Chain:
@@ -45,6 +45,9 @@ class Chain:
         self.steps.append(step)
         return step
 
+    def start_target_similarity(self):
+        return self._model.similarity(self.start_word, self.target_word)
+
     def is_won(self):
         return bool(self.steps) and self.steps[-1].target_similarity >= self.threshold
 
@@ -77,7 +80,6 @@ class Chain:
                     "neighbor_similarity": step.neighbor_similarity,
                     "target_similarity": step.target_similarity,
                     "is_digression": step.is_digression,
-                    "similarities": step.similarities,
                 }
                 for step in self.steps
             ],

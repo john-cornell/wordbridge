@@ -48,7 +48,11 @@ def new_game():
     chain = Chain(model, start_word=start_word, target_word=target_word)
     session["chain"] = chain.to_dict()
 
-    return jsonify(start_word=start_word, target_word=target_word)
+    return jsonify(
+        start_word=start_word,
+        target_word=target_word,
+        start_target_similarity=chain.start_target_similarity(),
+    )
 
 
 @bp.post("/api/game/word")
@@ -104,7 +108,11 @@ def restart_game():
     chain.restart()
     session["chain"] = chain.to_dict()
 
-    return jsonify(start_word=chain.start_word, target_word=chain.target_word)
+    return jsonify(
+        start_word=chain.start_word,
+        target_word=chain.target_word,
+        start_target_similarity=chain.start_target_similarity(),
+    )
 
 
 @bp.get("/api/history")

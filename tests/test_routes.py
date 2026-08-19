@@ -19,7 +19,20 @@ def test_new_game_manual_mode_accepts_known_words(client):
         json={"mode": "manual", "word1": "cat", "word2": "auto"},
     )
     assert response.status_code == 200
-    assert response.get_json() == {"start_word": "cat", "target_word": "auto"}
+    assert response.get_json() == {
+        "start_word": "cat",
+        "target_word": "auto",
+        "start_target_similarity": 0.0,
+    }
+
+
+def test_new_game_manual_mode_returns_start_target_similarity(client):
+    response = client.post(
+        "/api/game/new",
+        json={"mode": "manual", "word1": "cat", "word2": "auto"},
+    )
+    data = response.get_json()
+    assert "start_target_similarity" in data
 
 
 def test_add_word_without_active_game_returns_error(client):
@@ -46,7 +59,19 @@ def test_restart_clears_chain(client):
     client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
     client.post("/api/game/word", json={"word": "car"})
     response = client.post("/api/game/restart")
-    assert response.get_json() == {"start_word": "cat", "target_word": "auto"}
+    assert response.get_json() == {
+        "start_word": "cat",
+        "target_word": "auto",
+        "start_target_similarity": 0.0,
+    }
+
+
+def test_restart_returns_start_target_similarity(client):
+    client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
+    client.post("/api/game/word", json={"word": "car"})
+    response = client.post("/api/game/restart")
+    data = response.get_json()
+    assert "start_target_similarity" in data
 
 
 def test_add_word_after_win_returns_400_and_does_not_add_second_history_row(client):
@@ -104,3 +129,36 @@ def test_add_word_response_includes_similarities_to_other_chain_words(client):
     assert "similarities" in data
     words_compared = {entry["word"] for entry in data["similarities"]}
     assert words_compared == {"cat", "auto", "dog"}
+
+
+def test_long_chain_does_not_overflow_session_cookie(client):
+    client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
+
+    # "car" is deliberately excluded here: it's highly similar to "auto" in
+    # the tiny fixture model and would trigger an early win, short-circuiting
+    # the chain before it reaches the length this test needs.
+    #
+    # The real-world bug report measured overflow at ~19 words against the
+    # full word2vec vocabulary (longer words, more float precision per
+    # entry). This fixture's vocabulary is tiny (3-4 letter words, only two
+    # distinct words cycled), so the same O(n^2) payload is much smaller per
+    # step and doesn't cross 4093 bytes until roughly 170+ steps. 200 steps
+    # is used here instead of ~20 so this test is a genuine regression
+    # guard: verified to fail (cookie > 4093 bytes) against the unfixed
+    # code, and pass comfortably against the fix.
+    words = ["dog", "cat"]
+    response = None
+    for i in range(200):
+        response = client.post("/api/game/word", json={"word": words[i % len(words)]})
+        assert response.status_code == 200
+
+    set_cookie = response.headers.get("Set-Cookie", "")
+    if set_cookie:
+        assert len(set_cookie) < 4093
+    else:
+        # Flask doesn't necessarily resend Set-Cookie on every response, so
+        # fall back to checking the size of the persisted session cookie
+        # directly via the test client's cookie jar.
+        session_cookie = client.get_cookie("session")
+        assert session_cookie is not None
+        assert len(session_cookie.value) < 4093

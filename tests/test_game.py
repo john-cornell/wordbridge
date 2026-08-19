@@ -107,3 +107,10 @@ def test_first_word_similarities_cover_only_start_and_target(tiny_model):
     step = chain.add_word("car")
     words_compared = {entry["word"] for entry in step.similarities}
     assert words_compared == {"cat", "auto"}
+
+
+def test_start_target_similarity_matches_model_similarity(tiny_model):
+    chain = Chain(tiny_model, start_word="cat", target_word="auto")
+    assert chain.start_target_similarity() == pytest.approx(
+        tiny_model.similarity("cat", "auto")
+    )
