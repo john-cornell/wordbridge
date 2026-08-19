@@ -70,9 +70,9 @@ def main():
                 failures.append(f"expected 3 nodes after adding 'car', got {node_count}")
 
             edge_count = page.eval_on_selector_all(".edge", "els => els.length")
-            if edge_count != 2:
+            if edge_count != 3:
                 failures.append(
-                    f"expected 2 pairwise edges (car-cat, car-auto) after one word, got {edge_count}"
+                    f"expected 3 edges (car-cat, car-auto, cat-auto) after one word, got {edge_count}"
                 )
 
             page.fill("#threshold-slider", "0")
@@ -81,9 +81,9 @@ def main():
             visible_edges = page.eval_on_selector_all(
                 ".edge", "els => els.filter(e => e.style.display !== 'none').length"
             )
-            if visible_edges != 2:
+            if visible_edges != 3:
                 failures.append(
-                    f"expected both edges visible at threshold 0, got {visible_edges} visible"
+                    f"expected all 3 edges (car-cat, car-auto, cat-auto) visible at threshold 0, got {visible_edges} visible"
                 )
 
             browser.close()
