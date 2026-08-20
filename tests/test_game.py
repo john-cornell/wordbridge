@@ -59,11 +59,25 @@ def test_winning_connection_returns_path_with_similarities(tiny_model):
     ]
 
 
+def test_score_scales_by_difficulty_multiplier(tiny_model):
+    # multiplier = threshold / 0.5 -> Normal (0.5) is 1x, Hard (0.7) is 1.4x, Easy (0.25) is 0.5x
+    easy = Chain(tiny_model, start_word="cat", target_word="auto", threshold=0.25)
+    normal = Chain(tiny_model, start_word="cat", target_word="auto", threshold=0.5)
+    hard = Chain(tiny_model, start_word="cat", target_word="auto", threshold=0.7)
+    for chain in (easy, normal, hard):
+        chain.add_word("dog")  # 1 step, 0 digressions, 0 hints -> raw score 90
+
+    assert easy.score() == 45
+    assert normal.score() == 90
+    assert hard.score() == 126
+
+
 def test_score_penalizes_length_and_digressions(tiny_model):
     chain = Chain(tiny_model, start_word="cat", target_word="auto", threshold=0.99)
     chain.add_word("car")
     chain.add_word("dog")  # digression, per test above
-    assert chain.score() == 100 - (10 * 2) - (5 * 1)
+    raw = 100 - (10 * 2) - (5 * 1)
+    assert chain.score() == round(raw * (0.99 / 0.5))  # threshold=0.99 -> 1.98x multiplier
 
 
 def test_is_over_soft_cap(tiny_model):
@@ -187,10 +201,11 @@ def test_next_hint_cost_starts_at_five_and_doubles(tiny_model):
 
 
 def test_use_hint_returns_cost_and_accumulates_into_score(tiny_model):
-    chain = Chain(tiny_model, start_word="cat", target_word="auto")
+    chain = Chain(tiny_model, start_word="cat", target_word="auto")  # default threshold=0.7
     assert chain.use_hint() == 5
     assert chain.use_hint() == 10
-    assert chain.score() == 100 - 15  # no steps/digressions yet, just hint cost
+    raw = 100 - 15  # no steps/digressions yet, just hint cost
+    assert chain.score() == round(raw * (0.7 / 0.5))  # threshold=0.7 -> 1.4x multiplier
 
 
 def test_restart_resets_hint_state(tiny_model):

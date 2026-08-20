@@ -101,7 +101,7 @@ def test_add_word_progresses_chain_and_persists_on_win(client):
 
     assert response.status_code == 200
     assert data["won"] is True
-    assert data["score"] == 90  # 100 - 10*1 - 5*0
+    assert data["score"] == 9  # raw 90 (100 - 10*1 - 5*0) * (0.05/0.5) difficulty multiplier
     assert data["winning_connection"] == [
         {"a": "cat", "b": "dog", "similarity": pytest.approx(0.9939, abs=0.001)},
         {"a": "dog", "b": "auto", "similarity": pytest.approx(0.1098, abs=0.001)},
@@ -400,7 +400,7 @@ def test_high_scores_includes_win_with_source_dest_score_and_date(client):
     entry = data["scores"][0]
     assert entry["start_word"] == "cat"
     assert entry["target_word"] == "auto"
-    assert entry["score"] == 90
+    assert entry["score"] == 9  # raw 90 (100 - 10*1 - 5*0) * (0.05/0.5) difficulty multiplier
     assert "created_at" in entry
 
 

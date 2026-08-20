@@ -108,7 +108,9 @@ class Chain:
         return sum(1 for step in self.steps if step.is_digression)
 
     def score(self):
-        return 100 - (10 * len(self.steps)) - (5 * self.num_digressions()) - self.hint_cost_total
+        raw = 100 - (10 * len(self.steps)) - (5 * self.num_digressions()) - self.hint_cost_total
+        difficulty_multiplier = self.threshold / 0.5
+        return round(raw * difficulty_multiplier)
 
     def next_hint_cost(self):
         return 5 * (2 ** self.hints_used)
