@@ -334,6 +334,29 @@ def test_give_up_route_still_shows_played_words_when_no_continuation_found(
     assert data["route"] == ["cat", "dog"]
 
 
+def test_give_up_falls_back_to_route_from_start_when_current_position_is_a_dead_end(
+    client, tiny_model, monkeypatch
+):
+    real_find_route = tiny_model.find_route
+
+    def fake_find_route(from_word, to_word, **kwargs):
+        if from_word == "dog":
+            return None  # wherever the player wandered to leads nowhere
+        return real_find_route(from_word, to_word, **kwargs)
+
+    monkeypatch.setattr(tiny_model, "find_route", fake_find_route)
+
+    client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
+    client.post("/api/game/word", json={"word": "dog"})
+
+    response = client.post("/api/game/give_up")
+    data = response.get_json()
+
+    assert response.status_code == 200
+    # A real route from the true start ("cat"), not the player's dead-end ("dog").
+    assert data["route"] == ["cat", "auto"]
+
+
 def test_give_up_route_includes_words_already_played(client):
     client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
     client.post("/api/game/word", json={"word": "dog"})

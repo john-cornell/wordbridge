@@ -184,10 +184,24 @@ def give_up():
     best_step = chain.best_step()
     current_word = chain.steps[-1].word if chain.steps else chain.start_word
     played_words = [chain.start_word] + [step.word for step in chain.steps]
+
     suggested_continuation = model.find_route(
-        current_word, chain.target_word, win_threshold=chain.threshold
+        current_word, chain.target_word, max_hops=8, neighbors_per_hop=40, win_threshold=chain.threshold
     )
-    route = played_words + (suggested_continuation or [])
+    if suggested_continuation is not None:
+        route = played_words + suggested_continuation
+    else:
+        # Wherever the player wandered to didn't lead anywhere — try a fresh
+        # route from the true start instead of just echoing their dead end.
+        fresh_route = model.find_route(
+            chain.start_word,
+            chain.target_word,
+            max_hops=8,
+            neighbors_per_hop=40,
+            win_threshold=chain.threshold,
+        )
+        route = [chain.start_word] + fresh_route if fresh_route is not None else played_words
+
     chain.mark_completed()
     session["chain"] = chain.to_dict()
 
