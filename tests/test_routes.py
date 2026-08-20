@@ -77,6 +77,15 @@ def test_set_threshold_rejects_out_of_range_value(client):
     assert response.status_code == 400
 
 
+def test_new_game_defaults_threshold_to_last_saved_value(client):
+    client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
+    client.post("/api/game/threshold", json={"threshold": 0.42})
+
+    response = client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
+
+    assert response.get_json()["threshold"] == 0.42
+
+
 def test_add_word_without_active_game_returns_error(client):
     response = client.post("/api/game/word", json={"word": "dog"})
     assert response.status_code == 400

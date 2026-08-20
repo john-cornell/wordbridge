@@ -12,14 +12,35 @@ CREATE TABLE IF NOT EXISTS attempts (
     score INTEGER NOT NULL,
     created_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS preferences (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    last_threshold REAL NOT NULL
+);
 """
+
+DEFAULT_THRESHOLD = 0.7
 
 
 def init_db(db_path):
     conn = sqlite3.connect(db_path, check_same_thread=False)
-    conn.execute(SCHEMA)
+    conn.executescript(SCHEMA)
     conn.commit()
     return conn
+
+
+def get_last_threshold(conn):
+    row = conn.execute("SELECT last_threshold FROM preferences WHERE id = 1").fetchone()
+    return row[0] if row else DEFAULT_THRESHOLD
+
+
+def set_last_threshold(conn, threshold):
+    conn.execute(
+        "INSERT INTO preferences (id, last_threshold) VALUES (1, ?) "
+        "ON CONFLICT(id) DO UPDATE SET last_threshold = excluded.last_threshold",
+        (threshold,),
+    )
+    conn.commit()
 
 
 def save_attempt(conn, chain):

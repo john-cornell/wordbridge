@@ -1,6 +1,13 @@
 from flask import Blueprint, current_app, jsonify, request, session
 
-from .db import init_db, list_attempts, list_high_scores, save_attempt
+from .db import (
+    get_last_threshold,
+    init_db,
+    list_attempts,
+    list_high_scores,
+    save_attempt,
+    set_last_threshold,
+)
 from .game import Chain
 
 bp = Blueprint("routes", __name__)
@@ -50,7 +57,12 @@ def new_game():
     else:
         start_word, target_word = model.random_pair()
 
-    chain = Chain(model, start_word=start_word, target_word=target_word)
+    chain = Chain(
+        model,
+        start_word=start_word,
+        target_word=target_word,
+        threshold=get_last_threshold(_get_db_conn()),
+    )
     session["chain"] = chain.to_dict()
 
     return jsonify(
@@ -84,6 +96,7 @@ def set_threshold():
 
     chain.threshold = threshold
     session["chain"] = chain.to_dict()
+    set_last_threshold(_get_db_conn(), threshold)
 
     return jsonify(threshold=chain.threshold)
 

@@ -1,6 +1,13 @@
 import threading
 
-from wordbridge.db import init_db, list_attempts, list_high_scores, save_attempt
+from wordbridge.db import (
+    get_last_threshold,
+    init_db,
+    list_attempts,
+    list_high_scores,
+    save_attempt,
+    set_last_threshold,
+)
 from wordbridge.game import Chain
 
 
@@ -10,6 +17,24 @@ def test_init_db_creates_attempts_table():
         "SELECT name FROM sqlite_master WHERE type='table' AND name='attempts'"
     )
     assert cursor.fetchone() is not None
+
+
+def test_get_last_threshold_defaults_when_never_set():
+    conn = init_db(":memory:")
+    assert get_last_threshold(conn) == 0.7
+
+
+def test_set_last_threshold_then_get_returns_it():
+    conn = init_db(":memory:")
+    set_last_threshold(conn, 0.42)
+    assert get_last_threshold(conn) == 0.42
+
+
+def test_set_last_threshold_overwrites_previous_value():
+    conn = init_db(":memory:")
+    set_last_threshold(conn, 0.3)
+    set_last_threshold(conn, 0.9)
+    assert get_last_threshold(conn) == 0.9
 
 
 def test_save_and_list_attempt(tiny_model):
