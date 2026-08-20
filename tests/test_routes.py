@@ -84,12 +84,14 @@ def test_add_word_without_active_game_returns_error(client):
 
 def test_add_word_progresses_chain_and_persists_on_win(client):
     client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
-    response = client.post("/api/game/word", json={"word": "auto"})
+    client.post("/api/game/threshold", json={"threshold": 0.6})
+    client.post("/api/game/word", json={"word": "dog"})  # connected, not won yet
+    response = client.post("/api/game/word", json={"word": "van"})  # connected, wins
     data = response.get_json()
 
     assert response.status_code == 200
     assert data["won"] is True
-    assert data["score"] == 90  # 100 - 10*1 - 5*0
+    assert data["score"] == 80  # 100 - 10*2 - 5*0
 
     history_response = client.get("/api/history")
     attempts = history_response.get_json()["attempts"]
@@ -99,7 +101,7 @@ def test_add_word_progresses_chain_and_persists_on_win(client):
 
 def test_restart_clears_chain(client):
     client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
-    client.post("/api/game/word", json={"word": "car"})
+    client.post("/api/game/word", json={"word": "dog"})
     response = client.post("/api/game/restart")
     assert response.get_json() == {
         "start_word": "cat",
@@ -111,7 +113,7 @@ def test_restart_clears_chain(client):
 
 def test_restart_returns_start_target_similarity(client):
     client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
-    client.post("/api/game/word", json={"word": "car"})
+    client.post("/api/game/word", json={"word": "dog"})
     response = client.post("/api/game/restart")
     data = response.get_json()
     assert "start_target_similarity" in data
@@ -119,7 +121,9 @@ def test_restart_returns_start_target_similarity(client):
 
 def test_add_word_after_win_returns_400_and_does_not_add_second_history_row(client):
     client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
-    client.post("/api/game/word", json={"word": "auto"})  # wins immediately
+    client.post("/api/game/threshold", json={"threshold": 0.6})
+    client.post("/api/game/word", json={"word": "dog"})
+    client.post("/api/game/word", json={"word": "van"})  # wins
 
     response = client.post("/api/game/word", json={"word": "car"})
 
@@ -135,7 +139,9 @@ def test_add_word_after_win_returns_400_and_does_not_add_second_history_row(clie
 
 def test_only_one_history_row_after_repeated_add_word_calls_post_win(client):
     client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
-    client.post("/api/game/word", json={"word": "auto"})  # wins
+    client.post("/api/game/threshold", json={"threshold": 0.6})
+    client.post("/api/game/word", json={"word": "dog"})
+    client.post("/api/game/word", json={"word": "van"})  # wins
 
     for _ in range(3):
         client.post("/api/game/word", json={"word": "car"})
@@ -165,7 +171,7 @@ def test_add_word_response_includes_similarities_to_other_chain_words(client):
     response1 = client.post("/api/game/word", json={"word": "dog"})
     # First call should still be in progress
     assert response1.status_code == 200
-    response2 = client.post("/api/game/word", json={"word": "car"})
+    response2 = client.post("/api/game/word", json={"word": "van"})
     data = response2.get_json()
 
     # The second word should have similarities to cat, auto, and dog
@@ -260,7 +266,9 @@ def test_give_up_locks_chain_against_further_add_word(client):
 
 def test_give_up_on_already_won_chain_returns_400(client):
     client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
-    client.post("/api/game/word", json={"word": "car"})  # wins immediately (sim ~0.99)
+    client.post("/api/game/threshold", json={"threshold": 0.6})
+    client.post("/api/game/word", json={"word": "dog"})
+    client.post("/api/game/word", json={"word": "van"})  # wins
 
     response = client.post("/api/game/give_up")
 

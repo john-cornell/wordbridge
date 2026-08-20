@@ -32,6 +32,11 @@ class Chain:
         )
 
         neighbor_similarity = self._model.similarity(word, previous_word)
+        if neighbor_similarity < self.threshold:
+            raise ValueError(
+                f"'{word}' isn't similar enough to '{previous_word}' to connect — try a word closer to it."
+            )
+
         target_similarity = self._model.similarity(word, self.target_word)
         is_digression = target_similarity < previous_target_similarity
 
