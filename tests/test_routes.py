@@ -404,6 +404,19 @@ def test_high_scores_includes_win_with_source_dest_score_and_date(client):
     assert "created_at" in entry
 
 
+def test_clear_high_scores_empties_both_high_scores_and_history(client):
+    client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
+    client.post("/api/game/threshold", json={"threshold": 0.05})
+    client.post("/api/game/word", json={"word": "dog"})  # wins (bridges cat to auto)
+
+    response = client.post("/api/high_scores/clear")
+
+    assert response.status_code == 200
+    assert response.get_json() == {"cleared": True}
+    assert client.get("/api/high_scores").get_json() == {"scores": []}
+    assert client.get("/api/history").get_json() == {"attempts": []}
+
+
 def test_restart_after_give_up_produces_fresh_playable_chain(client):
     client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
     client.post("/api/game/word", json={"word": "dog"})

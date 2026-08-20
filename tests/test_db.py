@@ -1,6 +1,7 @@
 import threading
 
 from wordbridge.db import (
+    clear_attempts,
     get_last_threshold,
     init_db,
     list_attempts,
@@ -87,6 +88,18 @@ def test_list_high_scores_orders_by_score_descending(tiny_model):
     assert scores[0]["start_word"] == "cat"
     assert scores[0]["target_word"] == "auto"
     assert "created_at" in scores[0]
+
+
+def test_clear_attempts_empties_the_table(tiny_model):
+    conn = init_db(":memory:")
+    chain = Chain(tiny_model, start_word="cat", target_word="auto", threshold=0.5)
+    chain.add_word("dog")
+    save_attempt(conn, chain)
+
+    clear_attempts(conn)
+
+    assert list_attempts(conn) == []
+    assert list_high_scores(conn) == []
 
 
 def test_list_attempts_orders_most_recent_first(tiny_model):

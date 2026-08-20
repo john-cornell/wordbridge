@@ -1,6 +1,7 @@
 from flask import Blueprint, current_app, jsonify, request, session
 
 from .db import (
+    clear_attempts,
     get_last_threshold,
     init_db,
     list_attempts,
@@ -228,3 +229,9 @@ def history():
 @bp.get("/api/high_scores")
 def high_scores():
     return jsonify(scores=list_high_scores(_get_db_conn()))
+
+
+@bp.post("/api/high_scores/clear")
+def clear_high_scores():
+    clear_attempts(_get_db_conn())
+    return jsonify(cleared=True)

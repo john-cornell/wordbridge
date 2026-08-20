@@ -44,6 +44,7 @@ def test_scores_page_served(client):
     response = client.get("/scores")
     assert response.status_code == 200
     assert b'id="scores-table"' in response.data
+    assert b'id="clear-scores-btn"' in response.data
 
 
 def test_index_page_links_to_scores_page(client):

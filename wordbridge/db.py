@@ -79,6 +79,11 @@ def list_high_scores(conn, limit=50):
     ]
 
 
+def clear_attempts(conn):
+    conn.execute("DELETE FROM attempts")
+    conn.commit()
+
+
 def list_attempts(conn):
     rows = conn.execute(
         "SELECT id, start_word, target_word, chain_json, num_digressions, score, created_at "

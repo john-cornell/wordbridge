@@ -4,11 +4,13 @@ async function loadHighScores() {
 
   const tbody = document.getElementById("scores-body");
   const emptyMessage = document.getElementById("empty-message");
+  tbody.innerHTML = "";
 
   if (data.scores.length === 0) {
     emptyMessage.hidden = false;
     return;
   }
+  emptyMessage.hidden = true;
 
   for (const entry of data.scores) {
     const row = document.createElement("tr");
@@ -32,5 +34,11 @@ async function loadHighScores() {
     tbody.appendChild(row);
   }
 }
+
+document.getElementById("clear-scores-btn").addEventListener("click", async () => {
+  if (!confirm("Clear all high scores? This can't be undone.")) return;
+  await fetch("/api/high_scores/clear", { method: "POST" });
+  loadHighScores();
+});
 
 loadHighScores();

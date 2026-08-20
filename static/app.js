@@ -81,6 +81,7 @@ function showGame(startWord, targetWord, startTargetSimilarity, threshold) {
   document.getElementById("word-input").disabled = false;
   document.getElementById("add-word-btn").disabled = false;
   document.getElementById("hint-btn").disabled = false;
+  document.getElementById("give-up-btn").disabled = false;
   document.getElementById("restart-btn").hidden = false;
   setupSection.hidden = true;
   gameSection.hidden = false;
@@ -134,6 +135,7 @@ async function addWord() {
       document.getElementById("word-input").disabled = true;
       document.getElementById("add-word-btn").disabled = true;
       document.getElementById("hint-btn").disabled = true;
+      document.getElementById("give-up-btn").disabled = true;
       document.getElementById("restart-btn").hidden = true;
     } else if (data.over_soft_cap) {
       statusEl.textContent = "Chain is getting long — score is dropping fast.";
