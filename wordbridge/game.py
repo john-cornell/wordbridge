@@ -54,7 +54,28 @@ class Chain:
         return max(self.steps, key=lambda step: step.target_similarity)
 
     def is_won(self):
-        return bool(self.steps) and self.steps[-1].target_similarity >= self.threshold
+        if not self.steps:
+            return False
+
+        words = [self.start_word, self.target_word] + [s.word for s in self.steps]
+        adjacency = {word: set() for word in words}
+        for i, a in enumerate(words):
+            for b in words[i + 1:]:
+                if a != b and self._model.similarity(a, b) >= self.threshold:
+                    adjacency[a].add(b)
+                    adjacency[b].add(a)
+
+        visited = set()
+        frontier = [self.start_word]
+        while frontier:
+            word = frontier.pop()
+            if word == self.target_word:
+                return True
+            if word in visited:
+                continue
+            visited.add(word)
+            frontier.extend(adjacency[word] - visited)
+        return False
 
     def is_over_soft_cap(self):
         return len(self.steps) > self.soft_cap

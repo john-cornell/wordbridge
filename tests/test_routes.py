@@ -84,7 +84,10 @@ def test_add_word_without_active_game_returns_error(client):
 
 def test_add_word_progresses_chain_and_persists_on_win(client):
     client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
-    response = client.post("/api/game/word", json={"word": "auto"})
+    client.post("/api/game/threshold", json={"threshold": 0.05})
+    # threshold=0.05: cat-dog and dog-auto both clear it, so "dog" bridges
+    # start to target and wins even though cat-auto direct similarity is ~0.0.
+    response = client.post("/api/game/word", json={"word": "dog"})
     data = response.get_json()
 
     assert response.status_code == 200
@@ -119,7 +122,8 @@ def test_restart_returns_start_target_similarity(client):
 
 def test_add_word_after_win_returns_400_and_does_not_add_second_history_row(client):
     client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
-    client.post("/api/game/word", json={"word": "auto"})  # wins immediately
+    client.post("/api/game/threshold", json={"threshold": 0.05})
+    client.post("/api/game/word", json={"word": "dog"})  # wins (bridges cat to auto)
 
     response = client.post("/api/game/word", json={"word": "car"})
 
@@ -135,7 +139,8 @@ def test_add_word_after_win_returns_400_and_does_not_add_second_history_row(clie
 
 def test_only_one_history_row_after_repeated_add_word_calls_post_win(client):
     client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
-    client.post("/api/game/word", json={"word": "auto"})  # wins
+    client.post("/api/game/threshold", json={"threshold": 0.05})
+    client.post("/api/game/word", json={"word": "dog"})  # wins (bridges cat to auto)
 
     for _ in range(3):
         client.post("/api/game/word", json={"word": "car"})
@@ -260,7 +265,8 @@ def test_give_up_locks_chain_against_further_add_word(client):
 
 def test_give_up_on_already_won_chain_returns_400(client):
     client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
-    client.post("/api/game/word", json={"word": "car"})  # wins immediately (sim ~0.99)
+    client.post("/api/game/threshold", json={"threshold": 0.05})
+    client.post("/api/game/word", json={"word": "dog"})  # wins (bridges cat to auto)
 
     response = client.post("/api/game/give_up")
 

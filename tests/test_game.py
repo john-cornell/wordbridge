@@ -24,11 +24,21 @@ def test_add_word_rejects_unknown_word(tiny_model):
         chain.add_word("nonexistent")
 
 
-def test_is_won_when_target_similarity_meets_threshold(tiny_model):
-    chain = Chain(tiny_model, start_word="cat", target_word="auto", threshold=0.5)
+def test_is_won_when_graph_connects_start_to_target(tiny_model):
+    # threshold=0.05: cat-dog and dog-auto both clear it, so "dog" bridges
+    # start to target even though cat-auto direct similarity is ~0.0.
+    chain = Chain(tiny_model, start_word="cat", target_word="auto", threshold=0.05)
     assert chain.is_won() is False
-    chain.add_word("auto")
+    chain.add_word("dog")
     assert chain.is_won() is True
+
+
+def test_is_won_false_when_played_words_form_disconnected_islands(tiny_model):
+    # "dog" only bridges to "cat" here (dog-auto similarity is below threshold),
+    # so it's an island that never reaches the target.
+    chain = Chain(tiny_model, start_word="cat", target_word="auto", threshold=0.5)
+    chain.add_word("dog")
+    assert chain.is_won() is False
 
 
 def test_score_penalizes_length_and_digressions(tiny_model):
