@@ -26,6 +26,7 @@ def test_new_game_manual_mode_accepts_known_words(client):
         "start_word": "cat",
         "target_word": "auto",
         "start_target_similarity": 0.0,
+        "threshold": 0.7,
     }
 
 
@@ -66,6 +67,7 @@ def test_restart_clears_chain(client):
         "start_word": "cat",
         "target_word": "auto",
         "start_target_similarity": 0.0,
+        "threshold": 0.7,
     }
 
 

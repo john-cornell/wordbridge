@@ -52,6 +52,7 @@ def new_game():
         start_word=start_word,
         target_word=target_word,
         start_target_similarity=chain.start_target_similarity(),
+        threshold=chain.threshold,
     )
 
 
@@ -137,6 +138,7 @@ def restart_game():
         start_word=chain.start_word,
         target_word=chain.target_word,
         start_target_similarity=chain.start_target_similarity(),
+        threshold=chain.threshold,
     )
 
 

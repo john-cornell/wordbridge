@@ -30,6 +30,21 @@ def test_random_pair_returns_two_distinct_filtered_words(tiny_model):
     assert word_b in tiny_model._filtered_vocab
 
 
+def test_random_pair_resamples_when_first_pick_is_already_too_similar(tiny_model):
+    class FakeRng:
+        def __init__(self, picks):
+            self._picks = iter(picks)
+
+        def sample(self, population, k):
+            return list(next(self._picks))
+
+    # car/auto are ~0.99 similar in the tiny fixture — already an instant win.
+    # cat/car are ~0.0 similar — a safe, clearly-not-connected fallback pick.
+    fake_rng = FakeRng([("car", "auto"), ("cat", "car")])
+    word_a, word_b = tiny_model.random_pair(rng=fake_rng, max_similarity=0.7)
+    assert (word_a, word_b) == ("cat", "car")
+
+
 def test_find_route_returns_direct_route_when_target_is_nearest_neighbor(tiny_model):
     route = tiny_model.find_route("cat", "dog")
     assert route == ["dog"]

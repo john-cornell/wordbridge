@@ -17,7 +17,7 @@ class ChainGraph {
     this.tooltip = tooltipEl;
     this.width = Number(svgEl.getAttribute("width"));
     this.height = Number(svgEl.getAttribute("height"));
-    this.threshold = 0.15;
+    this.threshold = 0.7;
     this.nodes = [];
     this.edges = [];
     this.nodeEls = new Map();

@@ -22,8 +22,11 @@ class WordVectorModel:
     def similarity(self, word_a, word_b):
         return float(self._kv.similarity(word_a, word_b))
 
-    def random_pair(self, rng=random):
-        word_a, word_b = rng.sample(self._filtered_vocab, 2)
+    def random_pair(self, rng=random, max_similarity=0.7, max_attempts=20):
+        for _ in range(max_attempts):
+            word_a, word_b = rng.sample(self._filtered_vocab, 2)
+            if self.similarity(word_a, word_b) < max_similarity:
+                return word_a, word_b
         return word_a, word_b
 
     def find_route(self, from_word, to_word, max_hops=6, neighbors_per_hop=20, win_threshold=0.7):

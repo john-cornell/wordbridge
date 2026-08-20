@@ -35,7 +35,7 @@ async function postJSON(url, body) {
   return data;
 }
 
-function showGame(startWord, targetWord, startTargetSimilarity) {
+function showGame(startWord, targetWord, startTargetSimilarity, threshold) {
   startWordEl.textContent = startWord;
   targetWordEl.textContent = targetWord;
   chainGraph.reset(startWord, targetWord, startTargetSimilarity);
@@ -45,12 +45,17 @@ function showGame(startWord, targetWord, startTargetSimilarity) {
   document.getElementById("add-word-btn").disabled = false;
   setupSection.hidden = true;
   gameSection.hidden = false;
+
+  if (typeof threshold === "number") {
+    thresholdSlider.value = threshold;
+    applyThreshold();
+  }
 }
 
 document.getElementById("random-btn").addEventListener("click", async () => {
   try {
     const data = await postJSON("/api/game/new", { mode: "random" });
-    showGame(data.start_word, data.target_word, data.start_target_similarity);
+    showGame(data.start_word, data.target_word, data.start_target_similarity, data.threshold);
   } catch (err) {
     statusEl.textContent = err.message;
   }
@@ -61,13 +66,13 @@ document.getElementById("manual-btn").addEventListener("click", async () => {
   const word2 = document.getElementById("word2-input").value.trim();
   try {
     const data = await postJSON("/api/game/new", { mode: "manual", word1, word2 });
-    showGame(data.start_word, data.target_word, data.start_target_similarity);
+    showGame(data.start_word, data.target_word, data.start_target_similarity, data.threshold);
   } catch (err) {
     statusEl.textContent = err.message;
   }
 });
 
-document.getElementById("add-word-btn").addEventListener("click", async () => {
+async function addWord() {
   const input = document.getElementById("word-input");
   const word = input.value.trim();
   try {
@@ -87,6 +92,15 @@ document.getElementById("add-word-btn").addEventListener("click", async () => {
     }
   } catch (err) {
     statusEl.textContent = err.message;
+  }
+}
+
+document.getElementById("add-word-btn").addEventListener("click", addWord);
+
+document.getElementById("word-input").addEventListener("keydown", (evt) => {
+  if (evt.key === "Enter") {
+    evt.preventDefault();
+    addWord();
   }
 });
 
@@ -114,7 +128,7 @@ document.getElementById("give-up-btn").addEventListener("click", async () => {
 document.getElementById("restart-btn").addEventListener("click", async () => {
   try {
     const data = await postJSON("/api/game/restart");
-    showGame(data.start_word, data.target_word, data.start_target_similarity);
+    showGame(data.start_word, data.target_word, data.start_target_similarity, data.threshold);
   } catch (err) {
     statusEl.textContent = err.message;
   }
