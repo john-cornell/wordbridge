@@ -11,23 +11,37 @@ const chainGraph = new ChainGraph(
 );
 
 const thresholdSlider = document.getElementById("threshold-slider");
-const thresholdValueEl = document.getElementById("threshold-value");
+const thresholdInput = document.getElementById("threshold-input");
 
-function applyThreshold() {
-  const value = Number(thresholdSlider.value);
-  thresholdValueEl.textContent = value.toFixed(2);
-  chainGraph.setThreshold(value);
+function applyThreshold(value) {
+  thresholdSlider.value = value;
+  thresholdInput.value = value;
+  chainGraph.setThreshold(Number(value));
 }
 
-thresholdSlider.addEventListener("input", applyThreshold);
-thresholdSlider.addEventListener("change", async () => {
+async function persistThreshold(value) {
   try {
-    await postJSON("/api/game/threshold", { threshold: Number(thresholdSlider.value) });
+    await postJSON("/api/game/threshold", { threshold: Number(value) });
   } catch (err) {
     statusEl.textContent = err.message;
   }
+}
+
+thresholdSlider.addEventListener("input", () => applyThreshold(thresholdSlider.value));
+thresholdSlider.addEventListener("change", () => persistThreshold(thresholdSlider.value));
+
+thresholdInput.addEventListener("input", () => {
+  const value = Number(thresholdInput.value);
+  if (Number.isNaN(value) || value < 0 || value > 1) return;
+  applyThreshold(value);
 });
-applyThreshold();
+thresholdInput.addEventListener("change", () => {
+  const value = Number(thresholdInput.value);
+  if (Number.isNaN(value) || value < 0 || value > 1) return;
+  persistThreshold(value);
+});
+
+applyThreshold(thresholdSlider.value);
 
 async function postJSON(url, body) {
   const response = await fetch(url, {
@@ -54,10 +68,10 @@ function showGame(startWord, targetWord, startTargetSimilarity, threshold) {
   gameSection.hidden = false;
 
   if (typeof threshold === "number") {
-    thresholdSlider.value = threshold;
-    applyThreshold();
+    applyThreshold(threshold);
   }
   thresholdSlider.disabled = false;
+  thresholdInput.disabled = false;
 }
 
 document.getElementById("random-btn").addEventListener("click", async () => {
@@ -89,6 +103,7 @@ async function addWord() {
     scoreEl.textContent = `Score: ${data.score}`;
     input.value = "";
     thresholdSlider.disabled = true;
+    thresholdInput.disabled = true;
 
     if (data.won) {
       chainGraph.highlightWinningConnection(data.winning_connection);
@@ -123,6 +138,7 @@ document.getElementById("give-up-btn").addEventListener("click", async () => {
     document.getElementById("word-input").disabled = true;
     document.getElementById("add-word-btn").disabled = true;
     thresholdSlider.disabled = true;
+    thresholdInput.disabled = true;
 
     let message;
     if (data.best_word === null) {

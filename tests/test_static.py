@@ -10,6 +10,7 @@ def test_index_page_uses_graph_instead_of_list(client):
     assert b'id="chain-list"' not in response.data
     assert b'id="chain-graph"' in response.data
     assert b'id="threshold-slider"' in response.data
+    assert b'id="threshold-input"' in response.data
     assert b'id="graph-tooltip"' in response.data
 
 
