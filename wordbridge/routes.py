@@ -1,6 +1,6 @@
 from flask import Blueprint, current_app, jsonify, request, session
 
-from .db import init_db, list_attempts, save_attempt
+from .db import init_db, list_attempts, list_high_scores, save_attempt
 from .game import Chain
 
 bp = Blueprint("routes", __name__)
@@ -19,6 +19,11 @@ def _get_db_conn():
 @bp.get("/")
 def index():
     return current_app.send_static_file("index.html")
+
+
+@bp.get("/scores")
+def scores_page():
+    return current_app.send_static_file("scores.html")
 
 
 @bp.get("/api/health")
@@ -172,3 +177,8 @@ def restart_game():
 @bp.get("/api/history")
 def history():
     return jsonify(attempts=list_attempts(_get_db_conn()))
+
+
+@bp.get("/api/high_scores")
+def high_scores():
+    return jsonify(scores=list_high_scores(_get_db_conn()))

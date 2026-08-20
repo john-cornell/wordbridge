@@ -40,6 +40,24 @@ def save_attempt(conn, chain):
     conn.commit()
 
 
+def list_high_scores(conn, limit=50):
+    rows = conn.execute(
+        "SELECT id, start_word, target_word, score, created_at "
+        "FROM attempts ORDER BY score DESC, id DESC LIMIT ?",
+        (limit,),
+    ).fetchall()
+    return [
+        {
+            "id": row[0],
+            "start_word": row[1],
+            "target_word": row[2],
+            "score": row[3],
+            "created_at": row[4],
+        }
+        for row in rows
+    ]
+
+
 def list_attempts(conn):
     rows = conn.execute(
         "SELECT id, start_word, target_word, chain_json, num_digressions, score, created_at "

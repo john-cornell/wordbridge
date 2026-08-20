@@ -23,3 +23,15 @@ def test_graph_js_served(client):
     response = client.get("/graph.js")
     assert response.status_code == 200
     assert b"class ChainGraph" in response.data
+
+
+def test_scores_page_served(client):
+    response = client.get("/scores")
+    assert response.status_code == 200
+    assert b'id="scores-table"' in response.data
+
+
+def test_index_page_links_to_scores_page(client):
+    response = client.get("/")
+    assert response.status_code == 200
+    assert b'href="/scores"' in response.data

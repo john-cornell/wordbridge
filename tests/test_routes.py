@@ -286,6 +286,29 @@ def test_give_up_does_not_persist_to_history(client):
     assert attempts == []
 
 
+def test_high_scores_empty_when_no_wins_yet(client):
+    response = client.get("/api/high_scores")
+    assert response.status_code == 200
+    assert response.get_json() == {"scores": []}
+
+
+def test_high_scores_includes_win_with_source_dest_score_and_date(client):
+    client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
+    client.post("/api/game/threshold", json={"threshold": 0.05})
+    client.post("/api/game/word", json={"word": "dog"})  # wins (bridges cat to auto)
+
+    response = client.get("/api/high_scores")
+    data = response.get_json()
+
+    assert response.status_code == 200
+    assert len(data["scores"]) == 1
+    entry = data["scores"][0]
+    assert entry["start_word"] == "cat"
+    assert entry["target_word"] == "auto"
+    assert entry["score"] == 90
+    assert "created_at" in entry
+
+
 def test_restart_after_give_up_produces_fresh_playable_chain(client):
     client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
     client.post("/api/game/word", json={"word": "dog"})
