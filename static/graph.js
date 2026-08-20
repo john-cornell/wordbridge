@@ -131,6 +131,13 @@ class ChainGraph {
     };
   }
 
+  _fontSizeForWord(word) {
+    const maxWidth = NODE_RADIUS * 2 - 8;
+    const estimatedCharWidth = 0.6;
+    const fitted = maxWidth / (word.length * estimatedCharWidth);
+    return Math.max(6, Math.min(12, fitted));
+  }
+
   _nodeById(id) {
     return this.nodes.find((n) => n.id === id);
   }
@@ -149,6 +156,7 @@ class ChainGraph {
     text.textContent = node.word;
     text.setAttribute("text-anchor", "middle");
     text.setAttribute("dy", "0.35em");
+    text.style.fontSize = `${this._fontSizeForWord(node.word)}px`;
     g.appendChild(text);
 
     g.addEventListener("mouseenter", (evt) => this._showTooltip(node, evt));
