@@ -12,11 +12,15 @@ const chainGraph = new ChainGraph(
 
 const thresholdSlider = document.getElementById("threshold-slider");
 const thresholdInput = document.getElementById("threshold-input");
+const difficultyButtons = document.querySelectorAll(".difficulty-btn");
 
 function applyThreshold(value) {
   thresholdSlider.value = value;
   thresholdInput.value = value;
   chainGraph.setThreshold(Number(value));
+  for (const btn of difficultyButtons) {
+    btn.classList.toggle("active", Number(btn.dataset.threshold) === Number(value));
+  }
 }
 
 async function persistThreshold(value) {
@@ -42,8 +46,6 @@ thresholdInput.addEventListener("change", () => {
 });
 
 applyThreshold(thresholdSlider.value);
-
-const difficultyButtons = document.querySelectorAll(".difficulty-btn");
 
 for (const btn of difficultyButtons) {
   btn.addEventListener("click", () => {

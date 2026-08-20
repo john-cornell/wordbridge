@@ -1,21 +1,270 @@
-body {
-  font-family: sans-serif;
-  max-width: 40rem;
-  margin: 2rem auto;
-  padding: 0 1rem;
+:root {
+  --bg: #f3f4f8;
+  --surface: #ffffff;
+  --text: #1a1d29;
+  --text-muted: #6b7280;
+  --border: #e3e5ec;
+  --primary: #4f46e5;
+  --primary-hover: #4338ca;
+  --primary-soft: #eef0ff;
+  --danger: #dc2626;
+  --danger-soft: #fdeeee;
+  --success: #16a34a;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 4px 12px rgba(16, 24, 40, 0.06);
 }
 
-#status {
-  font-weight: bold;
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  max-width: 42rem;
+  margin: 0 auto;
+  padding: 2.5rem 1.25rem 4rem;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+}
+
+main {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.page-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+}
+
+h1 {
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+.card-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin: 0 0 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.nav-link {
+  color: var(--primary);
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.nav-link:hover {
+  text-decoration: underline;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 1.5rem;
+}
+
+.prompt {
+  font-size: 1.05rem;
+  margin: 0 0 1rem;
+}
+
+.prompt strong {
+  color: var(--primary);
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.75rem 0;
+}
+
+.actions-row {
+  margin-top: 0.5rem;
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  margin: 1rem 0;
+}
+
+.divider::before,
+.divider::after {
+  content: "";
+  flex: 1;
+  border-bottom: 1px solid var(--border);
+}
+
+.divider span {
+  padding: 0 0.75rem;
+}
+
+.text-input {
+  flex: 1;
+  min-width: 8rem;
+  font: inherit;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.text-input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-soft);
+}
+
+.text-input:disabled {
+  background: var(--bg);
+  color: var(--text-muted);
+}
+
+.btn {
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.9rem;
+  padding: 0.55rem 1rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease, opacity 0.12s ease;
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--primary);
+  color: #fff;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--primary-hover);
+}
+
+.btn-outline {
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.btn-outline:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.btn-danger-outline {
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--danger);
+}
+
+.btn-danger-outline:hover:not(:disabled) {
+  background: var(--danger-soft);
+  border-color: var(--danger);
+}
+
+.btn-chip {
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--text-muted);
+  padding: 0.35rem 0.85rem;
+  font-size: 0.82rem;
+}
+
+.btn-chip:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--primary);
+}
+
+.btn-chip.active {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+  color: var(--primary);
 }
 
 #graph-controls {
-  margin: 0.5rem 0;
+  margin: 0.5rem 0 1rem;
+  padding: 0.85rem 1rem;
+  background: var(--bg);
+  border-radius: var(--radius-sm);
+}
+
+.controls-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.controls-row label {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.controls-row input[type="range"] {
+  flex: 1;
+  min-width: 6rem;
+  accent-color: var(--primary);
+}
+
+.controls-row input[type="number"] {
+  width: 4.5rem;
+  font: inherit;
+  padding: 0.3rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.difficulty-group {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.6rem;
 }
 
 #chain-graph {
-  border: 1px solid #ccc;
-  background: #fafafa;
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  margin-bottom: 1rem;
+}
+
+#score {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin: 1rem 0 0.25rem;
+}
+
+#status {
+  font-weight: 600;
+  color: var(--text-muted);
+  margin: 0;
 }
 
 .node circle {
@@ -26,8 +275,8 @@ body {
 }
 
 .node circle.node-pinned {
-  fill: #444;
-  stroke: #222;
+  fill: #2b2f3a;
+  stroke: #14161c;
   cursor: default;
 }
 
@@ -44,28 +293,66 @@ body {
 }
 
 .edge {
-  stroke: #888;
+  stroke: #a3a8b8;
 }
 
 .edge.edge-winning {
-  stroke: #2ecc71;
+  stroke: var(--success);
 }
 
 .edge-label {
   font-size: 11px;
   font-weight: bold;
-  fill: #1a7a3d;
+  fill: #146c37;
   pointer-events: none;
   user-select: none;
 }
 
 #graph-tooltip {
   position: fixed;
-  background: #222;
+  background: #1a1d29;
   color: #fff;
   padding: 4px 8px;
-  border-radius: 4px;
+  border-radius: 6px;
   font-size: 12px;
   pointer-events: none;
   z-index: 10;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+#scores-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+
+#scores-table th,
+#scores-table td {
+  text-align: left;
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+
+#scores-table th {
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+#scores-table tbody tr:hover {
+  background: var(--bg);
+}
+
+#empty-message {
+  color: var(--text-muted);
+  margin: 1rem 0;
+}
+
+#clear-scores-btn {
+  margin-top: 1rem;
 }
