@@ -19,6 +19,9 @@ class Chain:
         self.soft_cap = soft_cap
         self.steps = []
         self.completed = False
+        self.won = False
+        self.hints_used = 0
+        self.hint_cost_total = 0
 
     def add_word(self, word):
         if not self._model.contains(word):
@@ -105,14 +108,30 @@ class Chain:
         return sum(1 for step in self.steps if step.is_digression)
 
     def score(self):
-        return 100 - (10 * len(self.steps)) - (5 * self.num_digressions())
+        return 100 - (10 * len(self.steps)) - (5 * self.num_digressions()) - self.hint_cost_total
+
+    def next_hint_cost(self):
+        return 5 * (2 ** self.hints_used)
+
+    def use_hint(self):
+        cost = self.next_hint_cost()
+        self.hints_used += 1
+        self.hint_cost_total += cost
+        return cost
 
     def restart(self):
         self.steps = []
         self.completed = False
+        self.won = False
+        self.hints_used = 0
+        self.hint_cost_total = 0
 
     def mark_completed(self):
         self.completed = True
+
+    def mark_won(self):
+        self.completed = True
+        self.won = True
 
     def to_dict(self):
         return {
@@ -121,6 +140,9 @@ class Chain:
             "threshold": self.threshold,
             "soft_cap": self.soft_cap,
             "completed": self.completed,
+            "won": self.won,
+            "hints_used": self.hints_used,
+            "hint_cost_total": self.hint_cost_total,
             "steps": [
                 {
                     "word": step.word,
@@ -143,4 +165,7 @@ class Chain:
         )
         chain.steps = [Step(**step) for step in data["steps"]]
         chain.completed = data.get("completed", False)
+        chain.won = data.get("won", False)
+        chain.hints_used = data.get("hints_used", 0)
+        chain.hint_cost_total = data.get("hint_cost_total", 0)
         return chain

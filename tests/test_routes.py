@@ -113,6 +113,19 @@ def test_add_word_progresses_chain_and_persists_on_win(client):
     assert attempts[0]["target_word"] == "auto"
 
 
+def test_restart_after_win_is_rejected(client):
+    client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
+    client.post("/api/game/threshold", json={"threshold": 0.05})
+    client.post("/api/game/word", json={"word": "dog"})  # wins (bridges cat to auto)
+
+    response = client.post("/api/game/restart")
+
+    assert response.status_code == 400
+    assert response.get_json() == {
+        "error": "Can't restart a won game — start a new game instead."
+    }
+
+
 def test_restart_clears_chain(client):
     client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
     client.post("/api/game/word", json={"word": "car"})
@@ -227,6 +240,46 @@ def test_long_chain_does_not_overflow_session_cookie(client):
         session_cookie = client.get_cookie("session")
         assert session_cookie is not None
         assert len(session_cookie.value) < 4093
+
+
+def test_hint_without_active_game_returns_error(client):
+    response = client.post("/api/game/hint")
+    assert response.status_code == 400
+
+
+def test_hint_reveals_next_word_and_charges_five_points(client):
+    client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
+
+    response = client.post("/api/game/hint")
+    data = response.get_json()
+
+    assert response.status_code == 200
+    assert data["hint_word"] == "auto"
+    assert data["cost"] == 5
+    assert data["score"] == 95
+
+
+def test_hint_cost_doubles_on_repeated_use(client):
+    client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
+
+    first = client.post("/api/game/hint").get_json()
+    second = client.post("/api/game/hint").get_json()
+
+    assert first["cost"] == 5
+    assert second["cost"] == 10
+    assert second["score"] == 85
+
+
+def test_hint_rejected_on_completed_chain(client):
+    client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
+    client.post("/api/game/give_up")
+
+    response = client.post("/api/game/hint")
+
+    assert response.status_code == 400
+    assert response.get_json() == {
+        "error": "This game is already complete — start a new game."
+    }
 
 
 def test_give_up_without_active_game_returns_error(client):

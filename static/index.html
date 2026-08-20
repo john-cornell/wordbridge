@@ -22,10 +22,14 @@
       <label for="threshold-slider">Connection threshold:</label>
       <input type="range" id="threshold-slider" min="0" max="1" step="0.01" value="0.70">
       <input type="number" id="threshold-input" min="0" max="1" step="0.01" value="0.70">
+      <button type="button" class="difficulty-btn" data-threshold="0.4">Easy</button>
+      <button type="button" class="difficulty-btn" data-threshold="0.7">Normal</button>
+      <button type="button" class="difficulty-btn" data-threshold="0.9">Hard</button>
     </div>
     <svg id="chain-graph" viewBox="0 0 600 300" width="600" height="300"></svg>
     <input id="word-input" placeholder="next word">
     <button id="add-word-btn">Add word</button>
+    <button id="hint-btn">Hint</button>
     <button id="give-up-btn">Give up</button>
     <button id="restart-btn">Restart</button>
     <button id="new-game-btn">New game</button>

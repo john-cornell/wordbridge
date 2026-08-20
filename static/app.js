@@ -43,6 +43,14 @@ thresholdInput.addEventListener("change", () => {
 
 applyThreshold(thresholdSlider.value);
 
+for (const btn of document.querySelectorAll(".difficulty-btn")) {
+  btn.addEventListener("click", () => {
+    const value = btn.dataset.threshold;
+    applyThreshold(value);
+    persistThreshold(value);
+  });
+}
+
 async function postJSON(url, body) {
   const response = await fetch(url, {
     method: "POST",
@@ -64,6 +72,8 @@ function showGame(startWord, targetWord, startTargetSimilarity, threshold) {
   statusEl.textContent = "";
   document.getElementById("word-input").disabled = false;
   document.getElementById("add-word-btn").disabled = false;
+  document.getElementById("hint-btn").disabled = false;
+  document.getElementById("restart-btn").hidden = false;
   setupSection.hidden = true;
   gameSection.hidden = false;
 
@@ -113,6 +123,8 @@ async function addWord() {
       statusEl.textContent = `You connected the words! ${path}`;
       document.getElementById("word-input").disabled = true;
       document.getElementById("add-word-btn").disabled = true;
+      document.getElementById("hint-btn").disabled = true;
+      document.getElementById("restart-btn").hidden = true;
     } else if (data.over_soft_cap) {
       statusEl.textContent = "Chain is getting long — score is dropping fast.";
     } else {
@@ -132,11 +144,27 @@ document.getElementById("word-input").addEventListener("keydown", (evt) => {
   }
 });
 
+document.getElementById("hint-btn").addEventListener("click", async () => {
+  try {
+    const data = await postJSON("/api/game/hint");
+    scoreEl.textContent = `Score: ${data.score}`;
+    if (data.hint_word === null) {
+      statusEl.textContent = "No hint available from here.";
+      return;
+    }
+    document.getElementById("word-input").value = data.hint_word;
+    statusEl.textContent = `Hint: '${data.hint_word}' (cost ${data.cost} points)`;
+  } catch (err) {
+    statusEl.textContent = err.message;
+  }
+});
+
 document.getElementById("give-up-btn").addEventListener("click", async () => {
   try {
     const data = await postJSON("/api/game/give_up");
     document.getElementById("word-input").disabled = true;
     document.getElementById("add-word-btn").disabled = true;
+    document.getElementById("hint-btn").disabled = true;
     thresholdSlider.disabled = true;
     thresholdInput.disabled = true;
 

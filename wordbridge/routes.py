@@ -129,7 +129,7 @@ def add_word():
     won = winning_connection is not None
     if won:
         save_attempt(_get_db_conn(), chain)
-        chain.mark_completed()
+        chain.mark_won()
 
     session["chain"] = chain.to_dict()
 
@@ -144,6 +144,29 @@ def add_word():
         won=won,
         over_soft_cap=chain.is_over_soft_cap(),
     )
+
+
+@bp.post("/api/game/hint")
+def hint():
+    model = _get_model()
+    if "chain" not in session:
+        return jsonify(error="No game in progress"), 400
+
+    chain = Chain.from_dict(model, session["chain"])
+
+    if chain.completed:
+        return jsonify(error="This game is already complete — start a new game."), 400
+
+    current_word = chain.steps[-1].word if chain.steps else chain.start_word
+    continuation = model.find_route(current_word, chain.target_word)
+
+    if not continuation:
+        return jsonify(hint_word=None, cost=0, score=chain.score())
+
+    cost = chain.use_hint()
+    session["chain"] = chain.to_dict()
+
+    return jsonify(hint_word=continuation[0], cost=cost, score=chain.score())
 
 
 @bp.post("/api/game/give_up")
@@ -180,6 +203,10 @@ def restart_game():
         return jsonify(error="No game in progress"), 400
 
     chain = Chain.from_dict(model, session["chain"])
+
+    if chain.won:
+        return jsonify(error="Can't restart a won game — start a new game instead."), 400
+
     chain.restart()
     session["chain"] = chain.to_dict()
 

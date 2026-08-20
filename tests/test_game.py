@@ -118,6 +118,21 @@ def test_restart_resets_completed_flag(tiny_model):
     assert chain.completed is False
 
 
+def test_mark_won_sets_completed_and_won_flags(tiny_model):
+    chain = Chain(tiny_model, start_word="cat", target_word="auto")
+    assert chain.won is False
+    chain.mark_won()
+    assert chain.completed is True
+    assert chain.won is True
+
+
+def test_restart_resets_won_flag(tiny_model):
+    chain = Chain(tiny_model, start_word="cat", target_word="auto")
+    chain.mark_won()
+    chain.restart()
+    assert chain.won is False
+
+
 def test_add_word_records_similarities_to_every_other_word(tiny_model):
     chain = Chain(tiny_model, start_word="cat", target_word="auto", threshold=0.99)
     chain.add_word("car")
@@ -158,3 +173,30 @@ def test_best_step_returns_step_with_highest_target_similarity(tiny_model):
     assert best.target_similarity == pytest.approx(
         tiny_model.similarity("dog", "auto")
     )
+
+
+def test_next_hint_cost_starts_at_five_and_doubles(tiny_model):
+    chain = Chain(tiny_model, start_word="cat", target_word="auto")
+    assert chain.next_hint_cost() == 5
+    chain.use_hint()
+    assert chain.next_hint_cost() == 10
+    chain.use_hint()
+    assert chain.next_hint_cost() == 20
+    chain.use_hint()
+    assert chain.next_hint_cost() == 40
+
+
+def test_use_hint_returns_cost_and_accumulates_into_score(tiny_model):
+    chain = Chain(tiny_model, start_word="cat", target_word="auto")
+    assert chain.use_hint() == 5
+    assert chain.use_hint() == 10
+    assert chain.score() == 100 - 15  # no steps/digressions yet, just hint cost
+
+
+def test_restart_resets_hint_state(tiny_model):
+    chain = Chain(tiny_model, start_word="cat", target_word="auto")
+    chain.use_hint()
+    chain.restart()
+    assert chain.hints_used == 0
+    assert chain.hint_cost_total == 0
+    assert chain.next_hint_cost() == 5
