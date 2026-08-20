@@ -158,7 +158,7 @@ def hint():
         return jsonify(error="This game is already complete — start a new game."), 400
 
     current_word = chain.steps[-1].word if chain.steps else chain.start_word
-    continuation = model.find_route(current_word, chain.target_word)
+    continuation = model.find_route(current_word, chain.target_word, win_threshold=chain.threshold)
 
     if not continuation:
         return jsonify(hint_word=None, cost=0, score=chain.score())
@@ -183,8 +183,10 @@ def give_up():
     best_step = chain.best_step()
     current_word = chain.steps[-1].word if chain.steps else chain.start_word
     played_words = [chain.start_word] + [step.word for step in chain.steps]
-    suggested_continuation = model.find_route(current_word, chain.target_word)
-    route = played_words + suggested_continuation if suggested_continuation is not None else None
+    suggested_continuation = model.find_route(
+        current_word, chain.target_word, win_threshold=chain.threshold
+    )
+    route = played_words + (suggested_continuation or [])
     chain.mark_completed()
     session["chain"] = chain.to_dict()
 

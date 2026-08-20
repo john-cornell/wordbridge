@@ -43,12 +43,20 @@ thresholdInput.addEventListener("change", () => {
 
 applyThreshold(thresholdSlider.value);
 
-for (const btn of document.querySelectorAll(".difficulty-btn")) {
+const difficultyButtons = document.querySelectorAll(".difficulty-btn");
+
+for (const btn of difficultyButtons) {
   btn.addEventListener("click", () => {
     const value = btn.dataset.threshold;
     applyThreshold(value);
     persistThreshold(value);
   });
+}
+
+function setDifficultyButtonsDisabled(disabled) {
+  for (const btn of difficultyButtons) {
+    btn.disabled = disabled;
+  }
 }
 
 async function postJSON(url, body) {
@@ -82,6 +90,7 @@ function showGame(startWord, targetWord, startTargetSimilarity, threshold) {
   }
   thresholdSlider.disabled = false;
   thresholdInput.disabled = false;
+  setDifficultyButtonsDisabled(false);
 }
 
 document.getElementById("random-btn").addEventListener("click", async () => {
@@ -114,6 +123,7 @@ async function addWord() {
     input.value = "";
     thresholdSlider.disabled = true;
     thresholdInput.disabled = true;
+    setDifficultyButtonsDisabled(true);
 
     if (data.won) {
       chainGraph.highlightWinningConnection(data.winning_connection);
@@ -167,6 +177,7 @@ document.getElementById("give-up-btn").addEventListener("click", async () => {
     document.getElementById("hint-btn").disabled = true;
     thresholdSlider.disabled = true;
     thresholdInput.disabled = true;
+    setDifficultyButtonsDisabled(true);
 
     let message;
     if (data.best_word === null) {

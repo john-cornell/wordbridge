@@ -26,7 +26,7 @@ def test_new_game_manual_mode_accepts_known_words(client):
         "start_word": "cat",
         "target_word": "auto",
         "start_target_similarity": 0.0,
-        "threshold": 0.7,
+        "threshold": 0.5,
     }
 
 
@@ -134,7 +134,7 @@ def test_restart_clears_chain(client):
         "start_word": "cat",
         "target_word": "auto",
         "start_target_similarity": 0.0,
-        "threshold": 0.7,
+        "threshold": 0.5,
     }
 
 
@@ -318,6 +318,20 @@ def test_give_up_response_includes_route_to_target(client):
 
     assert response.status_code == 200
     assert data["route"] == ["cat", "auto"]
+
+
+def test_give_up_route_still_shows_played_words_when_no_continuation_found(
+    client, tiny_model, monkeypatch
+):
+    monkeypatch.setattr(tiny_model, "find_route", lambda *args, **kwargs: None)
+    client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
+    client.post("/api/game/word", json={"word": "dog"})
+
+    response = client.post("/api/game/give_up")
+    data = response.get_json()
+
+    assert response.status_code == 200
+    assert data["route"] == ["cat", "dog"]
 
 
 def test_give_up_route_includes_words_already_played(client):

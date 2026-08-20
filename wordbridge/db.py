@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS preferences (
 );
 """
 
-DEFAULT_THRESHOLD = 0.7
+DEFAULT_THRESHOLD = 0.5
 
 
 def init_db(db_path):

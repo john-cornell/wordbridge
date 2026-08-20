@@ -21,7 +21,7 @@ def test_init_db_creates_attempts_table():
 
 def test_get_last_threshold_defaults_when_never_set():
     conn = init_db(":memory:")
-    assert get_last_threshold(conn) == 0.7
+    assert get_last_threshold(conn) == 0.5
 
 
 def test_set_last_threshold_then_get_returns_it():

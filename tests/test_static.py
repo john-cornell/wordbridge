@@ -29,9 +29,9 @@ def test_index_page_includes_hint_button(client):
 def test_index_page_includes_difficulty_buttons(client):
     response = client.get("/")
     assert response.status_code == 200
-    assert b'data-threshold="0.4"' in response.data
+    assert b'data-threshold="0.25"' in response.data
+    assert b'data-threshold="0.5"' in response.data
     assert b'data-threshold="0.7"' in response.data
-    assert b'data-threshold="0.9"' in response.data
 
 
 def test_graph_js_served(client):
