@@ -20,6 +20,13 @@ function applyThreshold() {
 }
 
 thresholdSlider.addEventListener("input", applyThreshold);
+thresholdSlider.addEventListener("change", async () => {
+  try {
+    await postJSON("/api/game/threshold", { threshold: Number(thresholdSlider.value) });
+  } catch (err) {
+    statusEl.textContent = err.message;
+  }
+});
 applyThreshold();
 
 async function postJSON(url, body) {
@@ -50,6 +57,7 @@ function showGame(startWord, targetWord, startTargetSimilarity, threshold) {
     thresholdSlider.value = threshold;
     applyThreshold();
   }
+  thresholdSlider.disabled = false;
 }
 
 document.getElementById("random-btn").addEventListener("click", async () => {
@@ -80,6 +88,7 @@ async function addWord() {
     chainGraph.addStep(data);
     scoreEl.textContent = `Score: ${data.score}`;
     input.value = "";
+    thresholdSlider.disabled = true;
 
     if (data.won) {
       statusEl.textContent = "You connected the words!";
@@ -109,6 +118,7 @@ document.getElementById("give-up-btn").addEventListener("click", async () => {
     const data = await postJSON("/api/game/give_up");
     document.getElementById("word-input").disabled = true;
     document.getElementById("add-word-btn").disabled = true;
+    thresholdSlider.disabled = true;
 
     let message;
     if (data.best_word === null) {

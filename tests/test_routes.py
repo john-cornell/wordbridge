@@ -39,6 +39,44 @@ def test_new_game_manual_mode_returns_start_target_similarity(client):
     assert "start_target_similarity" in data
 
 
+def test_set_threshold_without_active_game_returns_error(client):
+    response = client.post("/api/game/threshold", json={"threshold": 0.5})
+    assert response.status_code == 400
+
+
+def test_set_threshold_updates_chain_before_any_word_added(client):
+    client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
+
+    response = client.post("/api/game/threshold", json={"threshold": 0.01})
+
+    assert response.status_code == 200
+    assert response.get_json() == {"threshold": 0.01}
+
+    # A threshold this low should now make even a weak similarity a win.
+    word_response = client.post("/api/game/word", json={"word": "dog"})
+    assert word_response.get_json()["won"] is True
+
+
+def test_set_threshold_rejected_after_first_word_added(client):
+    client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
+    client.post("/api/game/word", json={"word": "dog"})
+
+    response = client.post("/api/game/threshold", json={"threshold": 0.01})
+
+    assert response.status_code == 400
+    assert response.get_json() == {
+        "error": "Threshold is locked once the game has started."
+    }
+
+
+def test_set_threshold_rejects_out_of_range_value(client):
+    client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
+
+    response = client.post("/api/game/threshold", json={"threshold": 1.5})
+
+    assert response.status_code == 400
+
+
 def test_add_word_without_active_game_returns_error(client):
     response = client.post("/api/game/word", json={"word": "dog"})
     assert response.status_code == 400

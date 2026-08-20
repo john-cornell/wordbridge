@@ -56,6 +56,33 @@ def new_game():
     )
 
 
+@bp.post("/api/game/threshold")
+def set_threshold():
+    model = _get_model()
+    if "chain" not in session:
+        return jsonify(error="No game in progress"), 400
+
+    chain = Chain.from_dict(model, session["chain"])
+
+    if chain.completed or chain.steps:
+        return jsonify(error="Threshold is locked once the game has started."), 400
+
+    payload = request.get_json(force=True) or {}
+    if not isinstance(payload, dict):
+        payload = {}
+    try:
+        threshold = float(payload.get("threshold"))
+    except (TypeError, ValueError):
+        return jsonify(error="threshold must be a number"), 400
+    if not 0 <= threshold <= 1:
+        return jsonify(error="threshold must be between 0 and 1"), 400
+
+    chain.threshold = threshold
+    session["chain"] = chain.to_dict()
+
+    return jsonify(threshold=chain.threshold)
+
+
 @bp.post("/api/game/word")
 def add_word():
     model = _get_model()
