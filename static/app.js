@@ -159,6 +159,10 @@ document.getElementById("word-input").addEventListener("keydown", (evt) => {
 });
 
 document.getElementById("hint-btn").addEventListener("click", async () => {
+  const btn = document.getElementById("hint-btn");
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Thinking…";
   try {
     const data = await postJSON("/api/game/hint");
     scoreEl.textContent = `Score: ${data.score}`;
@@ -170,10 +174,17 @@ document.getElementById("hint-btn").addEventListener("click", async () => {
     statusEl.textContent = `Hint: '${data.hint_word}' (cost ${data.cost} points)`;
   } catch (err) {
     statusEl.textContent = err.message;
+  } finally {
+    btn.textContent = originalText;
+    btn.disabled = false;
   }
 });
 
 document.getElementById("give-up-btn").addEventListener("click", async () => {
+  const btn = document.getElementById("give-up-btn");
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Finding a route…";
   try {
     const data = await postJSON("/api/game/give_up");
     document.getElementById("word-input").disabled = true;
@@ -195,6 +206,9 @@ document.getElementById("give-up-btn").addEventListener("click", async () => {
     statusEl.textContent = message;
   } catch (err) {
     statusEl.textContent = err.message;
+    btn.disabled = false;
+  } finally {
+    btn.textContent = originalText;
   }
 });
 
