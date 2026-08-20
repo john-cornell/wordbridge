@@ -93,6 +93,10 @@ def test_add_word_progresses_chain_and_persists_on_win(client):
     assert response.status_code == 200
     assert data["won"] is True
     assert data["score"] == 90  # 100 - 10*1 - 5*0
+    assert data["winning_connection"] == [
+        {"a": "cat", "b": "dog", "similarity": pytest.approx(0.9939, abs=0.001)},
+        {"a": "dog", "b": "auto", "similarity": pytest.approx(0.1098, abs=0.001)},
+    ]
 
     history_response = client.get("/api/history")
     attempts = history_response.get_json()["attempts"]
@@ -178,6 +182,10 @@ def test_add_word_response_includes_similarities_to_other_chain_words(client):
     words_compared = {entry["word"] for entry in data["similarities"]}
     assert words_compared == {"cat", "auto", "dog"}
 
+    # "car" only connects to "auto" here (an island) — not a win, so no connection.
+    assert data["won"] is False
+    assert data["winning_connection"] is None
+
 
 def test_long_chain_does_not_overflow_session_cookie(client):
     client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
@@ -247,7 +255,18 @@ def test_give_up_response_includes_route_to_target(client):
     data = response.get_json()
 
     assert response.status_code == 200
-    assert data["route"] == ["auto"]
+    assert data["route"] == ["cat", "auto"]
+
+
+def test_give_up_route_includes_words_already_played(client):
+    client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
+    client.post("/api/game/word", json={"word": "dog"})
+
+    response = client.post("/api/game/give_up")
+    data = response.get_json()
+
+    assert response.status_code == 200
+    assert data["route"] == ["cat", "dog", "auto"]
 
 
 def test_give_up_locks_chain_against_further_add_word(client):

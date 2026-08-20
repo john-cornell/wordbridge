@@ -112,7 +112,8 @@ def add_word():
     # chain.completed is guaranteed False here (an already-completed chain
     # returns 400 above, before add_word is ever called), so this is the
     # first time this chain has met the win condition.
-    won = chain.is_won()
+    winning_connection = chain.winning_connection()
+    won = winning_connection is not None
     if won:
         save_attempt(_get_db_conn(), chain)
         chain.mark_completed()
@@ -125,6 +126,7 @@ def add_word():
         target_similarity=step.target_similarity,
         is_digression=step.is_digression,
         similarities=step.similarities,
+        winning_connection=winning_connection,
         score=chain.score(),
         won=won,
         over_soft_cap=chain.is_over_soft_cap(),
@@ -144,7 +146,9 @@ def give_up():
 
     best_step = chain.best_step()
     current_word = chain.steps[-1].word if chain.steps else chain.start_word
-    route = model.find_route(current_word, chain.target_word)
+    played_words = [chain.start_word] + [step.word for step in chain.steps]
+    suggested_continuation = model.find_route(current_word, chain.target_word)
+    route = played_words + suggested_continuation if suggested_continuation is not None else None
     chain.mark_completed()
     session["chain"] = chain.to_dict()
 

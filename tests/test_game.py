@@ -41,6 +41,24 @@ def test_is_won_false_when_played_words_form_disconnected_islands(tiny_model):
     assert chain.is_won() is False
 
 
+def test_winning_connection_returns_none_when_not_won(tiny_model):
+    chain = Chain(tiny_model, start_word="cat", target_word="auto", threshold=0.5)
+    chain.add_word("dog")
+    assert chain.winning_connection() is None
+
+
+def test_winning_connection_returns_path_with_similarities(tiny_model):
+    chain = Chain(tiny_model, start_word="cat", target_word="auto", threshold=0.05)
+    chain.add_word("dog")
+
+    connection = chain.winning_connection()
+
+    assert connection == [
+        {"a": "cat", "b": "dog", "similarity": pytest.approx(tiny_model.similarity("cat", "dog"))},
+        {"a": "dog", "b": "auto", "similarity": pytest.approx(tiny_model.similarity("dog", "auto"))},
+    ]
+
+
 def test_score_penalizes_length_and_digressions(tiny_model):
     chain = Chain(tiny_model, start_word="cat", target_word="auto", threshold=0.99)
     chain.add_word("car")

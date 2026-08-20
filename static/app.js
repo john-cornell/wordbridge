@@ -91,7 +91,11 @@ async function addWord() {
     thresholdSlider.disabled = true;
 
     if (data.won) {
-      statusEl.textContent = "You connected the words!";
+      chainGraph.highlightWinningConnection(data.winning_connection);
+      const path = data.winning_connection
+        .map((link) => `${link.a} —${link.similarity.toFixed(2)}→ ${link.b}`)
+        .join(" ");
+      statusEl.textContent = `You connected the words! ${path}`;
       document.getElementById("word-input").disabled = true;
       document.getElementById("add-word-btn").disabled = true;
     } else if (data.over_soft_cap) {

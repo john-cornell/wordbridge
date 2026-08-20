@@ -54,8 +54,24 @@ class Chain:
         return max(self.steps, key=lambda step: step.target_similarity)
 
     def is_won(self):
+        return self._connection_path() is not None
+
+    def winning_connection(self):
+        path = self._connection_path()
+        if path is None:
+            return None
+        return [
+            {
+                "a": path[i],
+                "b": path[i + 1],
+                "similarity": self._model.similarity(path[i], path[i + 1]),
+            }
+            for i in range(len(path) - 1)
+        ]
+
+    def _connection_path(self):
         if not self.steps:
-            return False
+            return None
 
         words = [self.start_word, self.target_word] + [s.word for s in self.steps]
         adjacency = {word: set() for word in words}
@@ -65,17 +81,22 @@ class Chain:
                     adjacency[a].add(b)
                     adjacency[b].add(a)
 
-        visited = set()
+        visited = {self.start_word}
+        parent = {}
         frontier = [self.start_word]
         while frontier:
-            word = frontier.pop()
+            word = frontier.pop(0)
             if word == self.target_word:
-                return True
-            if word in visited:
-                continue
-            visited.add(word)
-            frontier.extend(adjacency[word] - visited)
-        return False
+                path = [word]
+                while path[-1] != self.start_word:
+                    path.append(parent[path[-1]])
+                path.reverse()
+                return path
+            for neighbor in adjacency[word] - visited:
+                visited.add(neighbor)
+                parent[neighbor] = word
+                frontier.append(neighbor)
+        return None
 
     def is_over_soft_cap(self):
         return len(self.steps) > self.soft_cap

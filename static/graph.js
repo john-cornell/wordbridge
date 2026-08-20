@@ -22,6 +22,8 @@ class ChainGraph {
     this.edges = [];
     this.nodeEls = new Map();
     this.edgeEls = new Map();
+    this.edgeLabelEls = new Map();
+    this._winningEdges = new Set();
     this._nodesByWord = new Map();
     this._nextId = 1;
     this.dragNode = null;
@@ -38,6 +40,8 @@ class ChainGraph {
     this.svg.innerHTML = "";
     this.nodeEls.clear();
     this.edgeEls.clear();
+    this.edgeLabelEls.clear();
+    this._winningEdges = new Set();
     this._nodesByWord.clear();
     this._nextId = 1;
     this.dragNode = null;
@@ -89,6 +93,27 @@ class ChainGraph {
 
   setThreshold(value) {
     this.threshold = value;
+  }
+
+  highlightWinningConnection(connection) {
+    this._winningEdges = new Set();
+    for (const link of connection || []) {
+      const edge = this._findEdgeForWordPair(link.a, link.b);
+      if (edge) this._winningEdges.add(edge);
+    }
+    this._renderEdges();
+  }
+
+  _findEdgeForWordPair(wordA, wordB) {
+    for (const edge of this.edges) {
+      const a = this._nodeById(edge.aId);
+      const b = this._nodeById(edge.bId);
+      if (!a || !b) continue;
+      if ((a.word === wordA && b.word === wordB) || (a.word === wordB && b.word === wordA)) {
+        return edge;
+      }
+    }
+    return null;
   }
 
   _makeNode(word, x, y, pinned) {
@@ -161,21 +186,54 @@ class ChainGraph {
     const b = this._nodeById(edge.bId);
     if (!line || !a || !b) return;
 
-    const visible = edge.similarity >= this.threshold;
+    const isWinning = this._winningEdges.has(edge);
+    const visible = edge.similarity >= this.threshold || isWinning;
     line.style.display = visible ? "" : "none";
-    if (!visible) return;
+    line.classList.toggle("edge-winning", isWinning);
+    if (!visible) {
+      this._removeEdgeLabel(edge);
+      return;
+    }
 
     line.setAttribute("x1", a.x);
     line.setAttribute("y1", a.y);
     line.setAttribute("x2", b.x);
     line.setAttribute("y2", b.y);
 
-    const range = Math.max(maxSimilarity - this.threshold, 0.0001);
-    const normalized = Math.min(1, Math.max(0, (edge.similarity - this.threshold) / range));
-    const width = MIN_EDGE_WIDTH + normalized * (MAX_EDGE_WIDTH - MIN_EDGE_WIDTH);
-    const opacity = MIN_EDGE_OPACITY + normalized * (MAX_EDGE_OPACITY - MIN_EDGE_OPACITY);
-    line.setAttribute("stroke-width", width.toFixed(2));
-    line.style.opacity = opacity.toFixed(2);
+    if (isWinning) {
+      line.setAttribute("stroke-width", MAX_EDGE_WIDTH.toFixed(2));
+      line.style.opacity = "1";
+      this._renderEdgeLabel(edge, a, b);
+    } else {
+      const range = Math.max(maxSimilarity - this.threshold, 0.0001);
+      const normalized = Math.min(1, Math.max(0, (edge.similarity - this.threshold) / range));
+      const width = MIN_EDGE_WIDTH + normalized * (MAX_EDGE_WIDTH - MIN_EDGE_WIDTH);
+      const opacity = MIN_EDGE_OPACITY + normalized * (MAX_EDGE_OPACITY - MIN_EDGE_OPACITY);
+      line.setAttribute("stroke-width", width.toFixed(2));
+      line.style.opacity = opacity.toFixed(2);
+      this._removeEdgeLabel(edge);
+    }
+  }
+
+  _renderEdgeLabel(edge, a, b) {
+    let text = this.edgeLabelEls.get(edge);
+    if (!text) {
+      text = document.createElementNS(SVG_NS, "text");
+      text.classList.add("edge-label");
+      text.setAttribute("text-anchor", "middle");
+      this.svg.appendChild(text);
+      this.edgeLabelEls.set(edge, text);
+    }
+    text.textContent = edge.similarity.toFixed(2);
+    text.setAttribute("x", (a.x + b.x) / 2);
+    text.setAttribute("y", (a.y + b.y) / 2 - 6);
+  }
+
+  _removeEdgeLabel(edge) {
+    const text = this.edgeLabelEls.get(edge);
+    if (!text) return;
+    text.remove();
+    this.edgeLabelEls.delete(edge);
   }
 
   _renderEdges() {
