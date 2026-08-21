@@ -67,3 +67,12 @@ def test_find_route_does_not_use_the_destination_shortcut_when_destination_exclu
     # neighbors and returned immediately. Excluding it must block that.
     route = tiny_model.find_route("cat", "auto", exclude={"auto"})
     assert route is None or "auto" not in route
+
+
+def test_find_route_refuses_a_candidate_that_is_not_an_improvement(tiny_model):
+    # "car" is already ~0.99 similar to "auto". With "auto" itself excluded,
+    # the only other real candidates ("cat", "dog") are far worse matches.
+    # Even though a low win_threshold would technically be satisfied by one
+    # of them, the search must not wander backwards to reach it.
+    route = tiny_model.find_route("car", "auto", exclude={"auto"}, win_threshold=0.05)
+    assert route is None
