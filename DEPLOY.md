@@ -21,7 +21,39 @@ sudo chown wordbridge:wordbridge /opt/wordbridge
 
 sudo -u wordbridge git clone <your-repo-url> /opt/wordbridge
 cd /opt/wordbridge
-sudo -u wordbridge python3 -m venv .venv
+```
+
+**Check the system Python version before creating the venv** (`python3 --version`).
+`gensim` (as of 4.4.0) has no prebuilt wheel for Python 3.12+ and its
+Cython-generated C extensions fail to compile against those versions'
+changed internals (`ma_version_tag`, `ob_digit`, etc. were removed/changed
+in CPython 3.12-3.14) — confirmed failing on Ubuntu 26.04's default Python
+3.14. If `python3 --version` is 3.12 or newer and no older `python3.1x` is
+installable via apt/deadsnakes for your distro release, build one with
+`pyenv` instead of using the system Python:
+
+```bash
+sudo apt install -y build-essential libssl-dev zlib1g-dev libbz2-dev \
+  libreadline-dev libsqlite3-dev curl git libncursesw5-dev xz-utils \
+  tk-dev libxml2-dev libxmlsec1-dev libffi-dev liblzma-dev
+
+sudo -u wordbridge bash -c 'curl -fsSL https://pyenv.run | bash'
+sudo -u wordbridge bash -c '
+export PYENV_ROOT="$HOME/.pyenv"
+export PATH="$PYENV_ROOT/bin:$PATH"
+eval "$(pyenv init -)"
+pyenv install 3.11.9
+'
+```
+
+Then create the venv with whichever Python is actually compatible —
+the system one if it's 3.11 or older, otherwise the pyenv-built one:
+
+```bash
+sudo -u wordbridge python3 -m venv .venv   # if system python3 is <= 3.11
+# OR, if you had to build one with pyenv:
+sudo -u wordbridge ~wordbridge/.pyenv/versions/3.11.9/bin/python3.11 -m venv .venv
+
 sudo -u wordbridge .venv/bin/pip install -r requirements.txt
 ```
 
