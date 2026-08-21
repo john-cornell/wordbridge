@@ -3,6 +3,7 @@ const gameSection = document.getElementById("game");
 const startWordEl = document.getElementById("start-word");
 const targetWordEl = document.getElementById("target-word");
 const scoreEl = document.getElementById("score");
+const parInfoEl = document.getElementById("par-info");
 const statusEl = document.getElementById("status");
 
 const chainGraph = new ChainGraph(
@@ -83,9 +84,16 @@ async function getJSON(url) {
   return data;
 }
 
+function formatScoreLine(data) {
+  if (typeof data.par_length === "number") {
+    return `Score: ${data.score} (par ${data.par_length} · you: ${data.words_used} word${data.words_used === 1 ? "" : "s"})`;
+  }
+  return `Score: ${data.score}`;
+}
+
 function applyMoveResult(data, messagePrefix) {
   chainGraph.addStep(data);
-  scoreEl.textContent = `Score: ${data.score}`;
+  scoreEl.textContent = formatScoreLine(data);
   thresholdSlider.disabled = true;
   thresholdInput.disabled = true;
   setDifficultyButtonsDisabled(true);
@@ -112,11 +120,12 @@ function applyMoveResult(data, messagePrefix) {
   }
 }
 
-function showGame(startWord, targetWord, startTargetSimilarity, threshold) {
+function showGame(startWord, targetWord, startTargetSimilarity, threshold, parLength) {
   startWordEl.textContent = startWord;
   targetWordEl.textContent = targetWord;
   chainGraph.reset(startWord, targetWord, startTargetSimilarity);
   scoreEl.textContent = "";
+  parInfoEl.textContent = typeof parLength === "number" ? `Shortest path found: ${parLength} word${parLength === 1 ? "" : "s"}` : "";
   statusEl.textContent = "";
   document.getElementById("word-input").disabled = false;
   document.getElementById("add-word-btn").disabled = false;
@@ -137,7 +146,7 @@ function showGame(startWord, targetWord, startTargetSimilarity, threshold) {
 document.getElementById("random-btn").addEventListener("click", async () => {
   try {
     const data = await postJSON("/api/game/new", { mode: "random" });
-    showGame(data.start_word, data.target_word, data.start_target_similarity, data.threshold);
+    showGame(data.start_word, data.target_word, data.start_target_similarity, data.threshold, data.par_length);
   } catch (err) {
     statusEl.textContent = err.message;
   }
@@ -148,7 +157,7 @@ document.getElementById("manual-btn").addEventListener("click", async () => {
   const word2 = document.getElementById("word2-input").value.trim();
   try {
     const data = await postJSON("/api/game/new", { mode: "manual", word1, word2 });
-    showGame(data.start_word, data.target_word, data.start_target_similarity, data.threshold);
+    showGame(data.start_word, data.target_word, data.start_target_similarity, data.threshold, data.par_length);
   } catch (err) {
     statusEl.textContent = err.message;
   }
@@ -244,13 +253,15 @@ document.getElementById("give-up-btn").addEventListener("click", async () => {
 document.getElementById("restart-btn").addEventListener("click", async () => {
   try {
     const data = await postJSON("/api/game/restart");
-    showGame(data.start_word, data.target_word, data.start_target_similarity, data.threshold);
+    showGame(data.start_word, data.target_word, data.start_target_similarity, data.threshold, data.par_length);
   } catch (err) {
     statusEl.textContent = err.message;
   }
 });
 
 document.getElementById("new-game-btn").addEventListener("click", () => {
+  document.getElementById("word1-input").value = "";
+  document.getElementById("word2-input").value = "";
   setupSection.hidden = false;
   gameSection.hidden = true;
 });

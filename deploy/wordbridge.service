@@ -1,0 +1,15 @@
+[Unit]
+Description=Wordbridge
+After=network.target
+
+[Service]
+Type=simple
+User=wordbridge
+WorkingDirectory=/opt/wordbridge
+Environment=SECRET_KEY=REPLACE_WITH_A_LONG_RANDOM_VALUE
+ExecStart=/opt/wordbridge/.venv/bin/gunicorn --workers 1 --timeout 120 --bind 0.0.0.0:8000 app:app
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

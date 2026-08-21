@@ -14,6 +14,9 @@ from .game import Chain
 bp = Blueprint("routes", __name__)
 
 _SEARCH_PARAMS = dict(max_hops=8, neighbors_per_hop=40)
+_PAR_SEARCH_PARAMS = dict(max_hops=10, neighbors_per_hop=60)
+_PAR_FALLBACK_SEARCH_PARAMS = dict(max_hops=15, neighbors_per_hop=100)
+_PAR_REROLL_ATTEMPTS = 20
 
 
 def _get_model():
@@ -95,6 +98,18 @@ def _find_real_route(chain, model):
     return None
 
 
+def _compute_par(model, start_word, target_word, threshold):
+    """Establish the puzzle's par: the shortest real route length the model
+    can find between start and target at this threshold. Tries a generous
+    search first, then an even more expensive one before giving up."""
+    route = model.find_route(start_word, target_word, win_threshold=threshold, **_PAR_SEARCH_PARAMS)
+    if route is None:
+        route = model.find_route(
+            start_word, target_word, win_threshold=threshold, **_PAR_FALLBACK_SEARCH_PARAMS
+        )
+    return len(route) if route is not None else None
+
+
 def _apply_step_and_check_win(chain, step, conn):
     winning_connection = chain.winning_connection()
     won = winning_connection is not None
@@ -112,6 +127,8 @@ def _apply_step_and_check_win(chain, step, conn):
         "similarities": step.similarities,
         "winning_connection": winning_connection,
         "score": chain.score(),
+        "par_length": chain.par_length,
+        "words_used": len(chain.steps),
         "won": won,
         "saved_to_high_scores": saved_to_high_scores,
         "over_soft_cap": chain.is_over_soft_cap(),
@@ -140,6 +157,7 @@ def new_game():
     if not isinstance(payload, dict):
         payload = {}
     mode = payload.get("mode", "random")
+    threshold = get_last_threshold(_get_db_conn())
 
     if mode == "manual":
         word1 = payload.get("word1", "").strip().lower()
@@ -149,14 +167,24 @@ def new_game():
         if not model.contains(word2):
             return jsonify(error=f"'{word2}' is not a recognized word"), 400
         start_word, target_word = word1, word2
+        par_length = _compute_par(model, start_word, target_word, threshold)
     else:
-        start_word, target_word = model.random_pair()
+        start_word = target_word = None
+        par_length = None
+        for _ in range(_PAR_REROLL_ATTEMPTS):
+            start_word, target_word = model.random_pair()
+            par_length = _compute_par(model, start_word, target_word, threshold)
+            if par_length is not None:
+                break
+        # If every reroll failed to find a route, the last-rolled pair is
+        # kept and Chain.score() falls back to the legacy formula.
 
     chain = Chain(
         model,
         start_word=start_word,
         target_word=target_word,
-        threshold=get_last_threshold(_get_db_conn()),
+        threshold=threshold,
+        par_length=par_length,
     )
     session["chain"] = chain.to_dict()
 
@@ -165,6 +193,7 @@ def new_game():
         target_word=target_word,
         start_target_similarity=chain.start_target_similarity(),
         threshold=chain.threshold,
+        par_length=chain.par_length,
     )
 
 
@@ -253,7 +282,13 @@ def hint():
 
     hint_word = _find_hint_word(chain, model)
     if hint_word is None:
-        return jsonify(hint_word=None, cost=0, score=chain.score())
+        return jsonify(
+            hint_word=None,
+            cost=0,
+            score=chain.score(),
+            par_length=chain.par_length,
+            words_used=len(chain.steps),
+        )
 
     cost = chain.use_hint()
     step = chain.add_word(hint_word)
@@ -307,6 +342,7 @@ def restart_game():
         target_word=chain.target_word,
         start_target_similarity=chain.start_target_similarity(),
         threshold=chain.threshold,
+        par_length=chain.par_length,
     )
 
 
