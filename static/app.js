@@ -133,7 +133,11 @@ async function addWord() {
       const path = data.winning_connection
         .map((link) => `${link.a} —${link.similarity.toFixed(2)}→ ${link.b}`)
         .join(" ");
-      statusEl.textContent = `You connected the words! ${path}`;
+      let message = `You connected the words! ${path}`;
+      if (!data.saved_to_high_scores) {
+        message += " (Not saved to high scores — you gave up on this pair earlier.)";
+      }
+      statusEl.textContent = message;
       document.getElementById("word-input").disabled = true;
       document.getElementById("add-word-btn").disabled = true;
       document.getElementById("hint-btn").disabled = true;

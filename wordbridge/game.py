@@ -20,6 +20,7 @@ class Chain:
         self.steps = []
         self.completed = False
         self.won = False
+        self.gave_up_before = False
         self.hints_used = 0
         self.hint_cost_total = 0
 
@@ -135,6 +136,10 @@ class Chain:
         self.completed = True
         self.won = True
 
+    def mark_given_up(self):
+        self.completed = True
+        self.gave_up_before = True
+
     def to_dict(self):
         return {
             "start_word": self.start_word,
@@ -143,6 +148,7 @@ class Chain:
             "soft_cap": self.soft_cap,
             "completed": self.completed,
             "won": self.won,
+            "gave_up_before": self.gave_up_before,
             "hints_used": self.hints_used,
             "hint_cost_total": self.hint_cost_total,
             "steps": [
@@ -168,6 +174,7 @@ class Chain:
         chain.steps = [Step(**step) for step in data["steps"]]
         chain.completed = data.get("completed", False)
         chain.won = data.get("won", False)
+        chain.gave_up_before = data.get("gave_up_before", False)
         chain.hints_used = data.get("hints_used", 0)
         chain.hint_cost_total = data.get("hint_cost_total", 0)
         return chain

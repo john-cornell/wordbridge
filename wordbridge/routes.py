@@ -128,8 +128,11 @@ def add_word():
     # first time this chain has met the win condition.
     winning_connection = chain.winning_connection()
     won = winning_connection is not None
+    saved_to_high_scores = False
     if won:
-        save_attempt(_get_db_conn(), chain)
+        if not chain.gave_up_before:
+            save_attempt(_get_db_conn(), chain)
+            saved_to_high_scores = True
         chain.mark_won()
 
     session["chain"] = chain.to_dict()
@@ -143,6 +146,7 @@ def add_word():
         winning_connection=winning_connection,
         score=chain.score(),
         won=won,
+        saved_to_high_scores=saved_to_high_scores,
         over_soft_cap=chain.is_over_soft_cap(),
     )
 
@@ -159,7 +163,20 @@ def hint():
         return jsonify(error="This game is already complete — start a new game."), 400
 
     current_word = chain.steps[-1].word if chain.steps else chain.start_word
-    continuation = model.find_route(current_word, chain.target_word, win_threshold=chain.threshold)
+    continuation = model.find_route(
+        current_word, chain.target_word, max_hops=8, neighbors_per_hop=40, win_threshold=chain.threshold
+    )
+
+    if not continuation and current_word != chain.start_word:
+        # Wherever the player currently is leads nowhere — fall back to a
+        # real route from the true start rather than reporting no hint at all.
+        continuation = model.find_route(
+            chain.start_word,
+            chain.target_word,
+            max_hops=8,
+            neighbors_per_hop=40,
+            win_threshold=chain.threshold,
+        )
 
     if not continuation:
         return jsonify(hint_word=None, cost=0, score=chain.score())
@@ -202,7 +219,7 @@ def give_up():
         )
         route = [chain.start_word] + fresh_route if fresh_route is not None else played_words
 
-    chain.mark_completed()
+    chain.mark_given_up()
     session["chain"] = chain.to_dict()
 
     return jsonify(

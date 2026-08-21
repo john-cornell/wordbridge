@@ -270,6 +270,29 @@ def test_hint_cost_doubles_on_repeated_use(client):
     assert second["score"] == 85
 
 
+def test_hint_falls_back_to_route_from_start_when_current_position_is_a_dead_end(
+    client, tiny_model, monkeypatch
+):
+    real_find_route = tiny_model.find_route
+
+    def fake_find_route(from_word, to_word, **kwargs):
+        if from_word == "dog":
+            return None  # wherever the player wandered to leads nowhere
+        return real_find_route(from_word, to_word, **kwargs)
+
+    monkeypatch.setattr(tiny_model, "find_route", fake_find_route)
+
+    client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
+    client.post("/api/game/word", json={"word": "dog"})
+
+    response = client.post("/api/game/hint")
+    data = response.get_json()
+
+    assert response.status_code == 200
+    assert data["hint_word"] == "auto"  # first step of a fresh route from "cat", not "dog"
+    assert data["cost"] == 5
+
+
 def test_hint_rejected_on_completed_chain(client):
     client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
     client.post("/api/game/give_up")
@@ -438,6 +461,33 @@ def test_clear_high_scores_empties_both_high_scores_and_history(client):
     assert response.get_json() == {"cleared": True}
     assert client.get("/api/high_scores").get_json() == {"scores": []}
     assert client.get("/api/history").get_json() == {"attempts": []}
+
+
+def test_win_after_restart_following_give_up_is_not_saved_as_high_score(client):
+    client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
+    client.post("/api/game/threshold", json={"threshold": 0.05})
+    client.post("/api/game/give_up")  # give up before playing any words
+    client.post("/api/game/restart")
+
+    response = client.post("/api/game/word", json={"word": "dog"})  # wins again
+    data = response.get_json()
+
+    assert data["won"] is True
+    assert data["saved_to_high_scores"] is False
+    assert client.get("/api/high_scores").get_json() == {"scores": []}
+    assert client.get("/api/history").get_json() == {"attempts": []}
+
+
+def test_win_without_prior_give_up_is_saved_as_high_score(client):
+    client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
+    client.post("/api/game/threshold", json={"threshold": 0.05})
+
+    response = client.post("/api/game/word", json={"word": "dog"})  # wins
+    data = response.get_json()
+
+    assert data["won"] is True
+    assert data["saved_to_high_scores"] is True
+    assert len(client.get("/api/high_scores").get_json()["scores"]) == 1
 
 
 def test_restart_after_give_up_produces_fresh_playable_chain(client):
