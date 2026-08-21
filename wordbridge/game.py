@@ -11,12 +11,13 @@ class Step:
 
 
 class Chain:
-    def __init__(self, model, start_word, target_word, threshold=0.7, soft_cap=15):
+    def __init__(self, model, start_word, target_word, threshold=0.7, soft_cap=15, par_length=None):
         self._model = model
         self.start_word = start_word
         self.target_word = target_word
         self.threshold = threshold
         self.soft_cap = soft_cap
+        self.par_length = par_length
         self.steps = []
         self.completed = False
         self.won = False
@@ -160,9 +161,21 @@ class Chain:
         return sum(1 for step in self.steps if step.is_digression)
 
     def score(self):
-        raw = 100 - (10 * len(self.steps)) - (5 * self.num_digressions()) - self.hint_cost_total
-        difficulty_multiplier = self.threshold / 0.5
-        return round(raw * difficulty_multiplier)
+        if self.par_length is None:
+            # No par could be established for this puzzle (e.g. the model
+            # couldn't find any route within search limits) — fall back to
+            # the old absolute formula rather than leave the game unscored.
+            raw = 100 - (10 * len(self.steps)) - (5 * self.num_digressions()) - self.hint_cost_total
+            difficulty_multiplier = self.threshold / 0.5
+            return round(raw * difficulty_multiplier)
+
+        # Par-relative scoring: a digression still counts as a played word,
+        # plus a 1-word penalty for the detour; a hint costs 2 effective
+        # words since it's a bigger crutch than just wandering off-path.
+        effective_words = len(self.steps) + self.num_digressions() + (2 * self.hints_used)
+        if effective_words <= 0:
+            return 100
+        return min(100, round(100 * self.par_length / effective_words))
 
     def next_hint_cost(self):
         return 5 * (2 ** self.hints_used)
@@ -202,6 +215,7 @@ class Chain:
             "gave_up_before": self.gave_up_before,
             "hints_used": self.hints_used,
             "hint_cost_total": self.hint_cost_total,
+            "par_length": self.par_length,
             "steps": [
                 {
                     "word": step.word,
@@ -221,6 +235,7 @@ class Chain:
             target_word=data["target_word"],
             threshold=data["threshold"],
             soft_cap=data["soft_cap"],
+            par_length=data.get("par_length"),
         )
         chain.steps = [Step(**step) for step in data["steps"]]
         chain.completed = data.get("completed", False)

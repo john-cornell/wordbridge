@@ -1,13 +1,13 @@
 const SVG_NS = "http://www.w3.org/2000/svg";
-const NODE_RADIUS = 22;
-const PADDING = 40;
+const NODE_RADIUS = 28;
+const PADDING = 50;
 const MIN_EDGE_WIDTH = 1;
 const MAX_EDGE_WIDTH = 6;
 const MIN_EDGE_OPACITY = 0.35;
 const MAX_EDGE_OPACITY = 1.0;
 const REPULSION_STRENGTH = 1200;
 const SPRING_STRENGTH = 0.02;
-const SPRING_REST_LENGTH = 90;
+const SPRING_REST_LENGTH = 110;
 const CENTER_STRENGTH = 0.0015;
 const DAMPING = 0.85;
 
@@ -135,7 +135,7 @@ class ChainGraph {
     const maxWidth = NODE_RADIUS * 2 - 8;
     const estimatedCharWidth = 0.6;
     const fitted = maxWidth / (word.length * estimatedCharWidth);
-    return Math.max(6, Math.min(12, fitted));
+    return Math.max(8, Math.min(14, fitted));
   }
 
   _nodeById(id) {

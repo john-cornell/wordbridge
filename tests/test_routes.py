@@ -27,6 +27,7 @@ def test_new_game_manual_mode_accepts_known_words(client):
         "target_word": "auto",
         "start_target_similarity": 0.0,
         "threshold": 0.5,
+        "par_length": 1,  # "auto" is trivially within reach of "cat" in the tiny fixture vocab
     }
 
 
@@ -101,7 +102,7 @@ def test_add_word_progresses_chain_and_persists_on_win(client):
 
     assert response.status_code == 200
     assert data["won"] is True
-    assert data["score"] == 9  # raw 90 (100 - 10*1 - 5*0) * (0.05/0.5) difficulty multiplier
+    assert data["score"] == 100  # par 1, 1 word used, no digressions/hints -> 100*1/1
     assert data["winning_connection"] == [
         {"a": "cat", "b": "dog", "similarity": pytest.approx(0.9939, abs=0.001)},
         {"a": "dog", "b": "auto", "similarity": pytest.approx(0.1098, abs=0.001)},
@@ -135,6 +136,7 @@ def test_restart_clears_chain(client):
         "target_word": "auto",
         "start_target_similarity": 0.0,
         "threshold": 0.5,
+        "par_length": 1,
     }
 
 
@@ -295,7 +297,7 @@ def test_hint_reveals_next_word_and_charges_five_points(client):
     assert response.status_code == 200
     assert data["hint_word"] == "auto"
     assert data["cost"] == 5
-    assert data["score"] == 85  # 100 - 10*1 step - 5 hint cost
+    assert data["score"] == 33  # par 1: effective_words = 1 step + 2 for the hint -> 100*1/3
     # The hint is applied as a real move, not just suggested.
     assert data["word"] == "auto"
 
@@ -308,7 +310,8 @@ def test_hint_cost_doubles_on_repeated_use(client):
 
     assert first["cost"] == 5
     assert second["cost"] == 10
-    assert second["score"] == 60  # 100 - 10*2 steps - 5 digression - 15 hint costs
+    # par 1: effective_words = 2 steps + 1 digression + 4 for two hints -> 100*1/7
+    assert second["score"] == 14
 
 
 def test_hint_falls_back_to_route_from_start_when_current_position_is_a_dead_end(
@@ -489,7 +492,7 @@ def test_high_scores_includes_win_with_source_dest_score_and_date(client):
     entry = data["scores"][0]
     assert entry["start_word"] == "cat"
     assert entry["target_word"] == "auto"
-    assert entry["score"] == 9  # raw 90 (100 - 10*1 - 5*0) * (0.05/0.5) difficulty multiplier
+    assert entry["score"] == 100  # par 1, 1 word used, no digressions/hints -> 100*1/1
     assert "created_at" in entry
 
 

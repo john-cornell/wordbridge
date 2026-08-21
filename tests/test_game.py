@@ -94,6 +94,56 @@ def test_score_penalizes_length_and_digressions(tiny_model):
     assert chain.score() == round(raw * (0.99 / 0.5))  # threshold=0.99 -> 1.98x multiplier
 
 
+def test_score_is_100_when_actual_words_match_par(tiny_model):
+    chain = Chain(tiny_model, start_word="cat", target_word="auto", threshold=0.99, par_length=2)
+    chain.add_word("car")
+    chain.add_word("auto")
+    assert chain.score() == 100
+
+
+def test_score_drops_relative_to_par_as_extra_words_are_used(tiny_model):
+    chain = Chain(tiny_model, start_word="cat", target_word="auto", threshold=0.99, par_length=1)
+    chain.add_word("car")
+    chain.add_word("auto")  # 2 words used against a par of 1 -> 100*1/2
+    assert chain.score() == 50
+
+
+def test_score_counts_a_digression_as_an_extra_effective_word(tiny_model):
+    chain = Chain(tiny_model, start_word="cat", target_word="auto", threshold=0.99, par_length=1)
+    chain.add_word("car")
+    chain.add_word("dog")  # digression, per test above
+    # effective_words = 2 played + 1 digression penalty -> 100*1/3
+    assert chain.score() == round(100 * 1 / 3)
+
+
+def test_score_counts_a_hint_as_two_extra_effective_words(tiny_model):
+    chain = Chain(tiny_model, start_word="cat", target_word="auto", par_length=1)  # default threshold=0.7
+    chain.use_hint()
+    chain.use_hint()
+    # no steps played, but effective_words = 2 hints * 2 -> 100*1/4
+    assert chain.score() == round(100 * 1 / 4)
+
+
+def test_score_falls_back_to_legacy_difficulty_formula_when_par_is_unknown(tiny_model):
+    # par_length defaults to None (e.g. the model couldn't find any route) —
+    # score() must not blow up, it falls back to the old absolute formula.
+    easy = Chain(tiny_model, start_word="cat", target_word="auto", threshold=0.25)
+    normal = Chain(tiny_model, start_word="cat", target_word="auto", threshold=0.5)
+    hard = Chain(tiny_model, start_word="cat", target_word="auto", threshold=0.7)
+    for chain in (easy, normal, hard):
+        chain.add_word("dog")  # 1 step, 0 digressions, 0 hints -> raw score 90
+
+    assert easy.score() == 45
+    assert normal.score() == 90
+    assert hard.score() == 126
+
+
+def test_par_length_round_trips_through_to_dict_and_from_dict(tiny_model):
+    chain = Chain(tiny_model, start_word="cat", target_word="auto", par_length=3)
+    restored = Chain.from_dict(tiny_model, chain.to_dict())
+    assert restored.par_length == 3
+
+
 def test_is_over_soft_cap(tiny_model):
     chain = Chain(tiny_model, start_word="cat", target_word="auto", soft_cap=1)
     chain.add_word("car")
