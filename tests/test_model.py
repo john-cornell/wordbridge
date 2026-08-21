@@ -53,3 +53,26 @@ def test_find_route_returns_direct_route_when_target_is_nearest_neighbor(tiny_mo
 def test_find_route_returns_none_when_no_route_found_within_hop_cap(tiny_model):
     route = tiny_model.find_route("cat", "auto", max_hops=1, neighbors_per_hop=1, win_threshold=2.0)
     assert route is None
+
+
+def test_find_route_never_returns_an_excluded_word(tiny_model):
+    # "dog" is cat's literal nearest neighbor and would normally be the
+    # answer — excluding it forces the search to find a real alternative.
+    route = tiny_model.find_route("cat", "auto", exclude={"dog"})
+    assert "dog" not in route
+
+
+def test_find_route_does_not_use_the_destination_shortcut_when_destination_excluded(tiny_model):
+    # Normally "auto" (the literal target) is found directly in cat's
+    # neighbors and returned immediately. Excluding it must block that.
+    route = tiny_model.find_route("cat", "auto", exclude={"auto"})
+    assert route is None or "auto" not in route
+
+
+def test_find_route_refuses_a_candidate_that_is_not_an_improvement(tiny_model):
+    # "car" is already ~0.99 similar to "auto". With "auto" itself excluded,
+    # the only other real candidates ("cat", "dog") are far worse matches.
+    # Even though a low win_threshold would technically be satisfied by one
+    # of them, the search must not wander backwards to reach it.
+    route = tiny_model.find_route("car", "auto", exclude={"auto"}, win_threshold=0.05)
+    assert route is None

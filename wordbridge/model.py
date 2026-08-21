@@ -29,14 +29,17 @@ class WordVectorModel:
                 return word_a, word_b
         return word_a, word_b
 
-    def find_route(self, from_word, to_word, max_hops=6, neighbors_per_hop=20, win_threshold=0.7):
+    def find_route(
+        self, from_word, to_word, max_hops=6, neighbors_per_hop=20, win_threshold=0.7, exclude=frozenset()
+    ):
         current = from_word
-        visited = {from_word}
+        current_similarity = self._kv.similarity(current, to_word)
+        visited = {from_word} | set(exclude)
         path = []
         for _ in range(max_hops):
             neighbors = [word for word, _ in self._kv.most_similar(current, topn=neighbors_per_hop)]
 
-            if to_word in neighbors:
+            if to_word in neighbors and to_word not in exclude:
                 path.append(to_word)
                 return path
 
@@ -45,12 +48,20 @@ class WordVectorModel:
                 return None
 
             best = max(candidates, key=lambda w: self._kv.similarity(w, to_word))
+            best_similarity = self._kv.similarity(best, to_word)
+            if best_similarity <= current_similarity:
+                # Nothing reachable from here is any closer than we already
+                # are — stop rather than wander sideways through a cluster
+                # of near-synonyms or drift backwards.
+                return None
+
             path.append(best)
-            if self._kv.similarity(best, to_word) >= win_threshold:
+            if best_similarity >= win_threshold:
                 return path
 
             visited.add(best)
             current = best
+            current_similarity = best_similarity
         return None
 
 

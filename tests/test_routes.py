@@ -247,6 +247,45 @@ def test_hint_without_active_game_returns_error(client):
     assert response.status_code == 400
 
 
+def test_hint_cost_without_active_game_returns_error(client):
+    response = client.get("/api/game/hint_cost")
+    assert response.status_code == 400
+
+
+def test_hint_cost_peeks_without_charging_or_applying_anything(client):
+    client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
+
+    first_peek = client.get("/api/game/hint_cost").get_json()
+    second_peek = client.get("/api/game/hint_cost").get_json()
+
+    assert first_peek == {"cost": 5}
+    assert second_peek == {"cost": 5}  # unchanged — peeking never charges
+
+    history_response = client.get("/api/history").get_json()
+    assert history_response == {"attempts": []}
+
+
+def test_hint_cost_reflects_escalating_price_after_a_real_hint(client):
+    client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
+    client.post("/api/game/hint")
+
+    peek = client.get("/api/game/hint_cost").get_json()
+    assert peek == {"cost": 10}
+
+
+def test_hint_never_suggests_a_word_already_on_the_board(client):
+    client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
+
+    # The target itself ("auto") is fair game for a first hint — it's the
+    # destination, not something already played.
+    first = client.post("/api/game/hint").get_json()
+    assert first["hint_word"] != "cat"
+
+    # Once played (by the first hint), it must not be suggested again.
+    second = client.post("/api/game/hint").get_json()
+    assert second["hint_word"] not in {"cat", first["hint_word"]}
+
+
 def test_hint_reveals_next_word_and_charges_five_points(client):
     client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
 
@@ -256,7 +295,9 @@ def test_hint_reveals_next_word_and_charges_five_points(client):
     assert response.status_code == 200
     assert data["hint_word"] == "auto"
     assert data["cost"] == 5
-    assert data["score"] == 95
+    assert data["score"] == 85  # 100 - 10*1 step - 5 hint cost
+    # The hint is applied as a real move, not just suggested.
+    assert data["word"] == "auto"
 
 
 def test_hint_cost_doubles_on_repeated_use(client):
@@ -267,7 +308,7 @@ def test_hint_cost_doubles_on_repeated_use(client):
 
     assert first["cost"] == 5
     assert second["cost"] == 10
-    assert second["score"] == 85
+    assert second["score"] == 60  # 100 - 10*2 steps - 5 digression - 15 hint costs
 
 
 def test_hint_falls_back_to_route_from_start_when_current_position_is_a_dead_end(
@@ -343,9 +384,11 @@ def test_give_up_response_includes_route_to_target(client):
     assert data["route"] == ["cat", "auto"]
 
 
-def test_give_up_route_still_shows_played_words_when_no_continuation_found(
+def test_give_up_route_is_none_when_no_real_path_can_be_found_anywhere(
     client, tiny_model, monkeypatch
 ):
+    # Every search strategy fails — give_up must not fall back to echoing
+    # the player's own dead-end path as if it were a solution.
     monkeypatch.setattr(tiny_model, "find_route", lambda *args, **kwargs: None)
     client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
     client.post("/api/game/word", json={"word": "dog"})
@@ -354,7 +397,7 @@ def test_give_up_route_still_shows_played_words_when_no_continuation_found(
     data = response.get_json()
 
     assert response.status_code == 200
-    assert data["route"] == ["cat", "dog"]
+    assert data["route"] is None
 
 
 def test_give_up_falls_back_to_route_from_start_when_current_position_is_a_dead_end(

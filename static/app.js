@@ -74,6 +74,44 @@ async function postJSON(url, body) {
   return data;
 }
 
+async function getJSON(url) {
+  const response = await fetch(url);
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error || "Request failed");
+  }
+  return data;
+}
+
+function applyMoveResult(data, messagePrefix) {
+  chainGraph.addStep(data);
+  scoreEl.textContent = `Score: ${data.score}`;
+  thresholdSlider.disabled = true;
+  thresholdInput.disabled = true;
+  setDifficultyButtonsDisabled(true);
+
+  if (data.won) {
+    chainGraph.highlightWinningConnection(data.winning_connection);
+    const path = data.winning_connection
+      .map((link) => `${link.a} —${link.similarity.toFixed(2)}→ ${link.b}`)
+      .join(" ");
+    let message = `${messagePrefix || ""}You connected the words! ${path}`;
+    if (!data.saved_to_high_scores) {
+      message += " (Not saved to high scores — you gave up on this pair earlier.)";
+    }
+    statusEl.textContent = message;
+    document.getElementById("word-input").disabled = true;
+    document.getElementById("add-word-btn").disabled = true;
+    document.getElementById("hint-btn").disabled = true;
+    document.getElementById("give-up-btn").disabled = true;
+    document.getElementById("restart-btn").hidden = true;
+  } else if (data.over_soft_cap) {
+    statusEl.textContent = `${messagePrefix || ""}Chain is getting long — score is dropping fast.`;
+  } else {
+    statusEl.textContent = messagePrefix || "";
+  }
+}
+
 function showGame(startWord, targetWord, startTargetSimilarity, threshold) {
   startWordEl.textContent = startWord;
   targetWordEl.textContent = targetWord;
@@ -121,33 +159,8 @@ async function addWord() {
   const word = input.value.trim();
   try {
     const data = await postJSON("/api/game/word", { word });
-    chainGraph.addStep(data);
-    scoreEl.textContent = `Score: ${data.score}`;
     input.value = "";
-    thresholdSlider.disabled = true;
-    thresholdInput.disabled = true;
-    setDifficultyButtonsDisabled(true);
-
-    if (data.won) {
-      chainGraph.highlightWinningConnection(data.winning_connection);
-      const path = data.winning_connection
-        .map((link) => `${link.a} —${link.similarity.toFixed(2)}→ ${link.b}`)
-        .join(" ");
-      let message = `You connected the words! ${path}`;
-      if (!data.saved_to_high_scores) {
-        message += " (Not saved to high scores — you gave up on this pair earlier.)";
-      }
-      statusEl.textContent = message;
-      document.getElementById("word-input").disabled = true;
-      document.getElementById("add-word-btn").disabled = true;
-      document.getElementById("hint-btn").disabled = true;
-      document.getElementById("give-up-btn").disabled = true;
-      document.getElementById("restart-btn").hidden = true;
-    } else if (data.over_soft_cap) {
-      statusEl.textContent = "Chain is getting long — score is dropping fast.";
-    } else {
-      statusEl.textContent = "";
-    }
+    applyMoveResult(data);
   } catch (err) {
     statusEl.textContent = err.message;
   }
@@ -164,23 +177,35 @@ document.getElementById("word-input").addEventListener("keydown", (evt) => {
 
 document.getElementById("hint-btn").addEventListener("click", async () => {
   const btn = document.getElementById("hint-btn");
+
+  let costData;
+  try {
+    costData = await getJSON("/api/game/hint_cost");
+  } catch (err) {
+    statusEl.textContent = err.message;
+    return;
+  }
+
+  const proceed = confirm(`Use a hint for ${costData.cost} points? It'll be added to your chain automatically.`);
+  if (!proceed) return;
+
   const originalText = btn.textContent;
   btn.disabled = true;
   btn.textContent = "Thinking…";
   try {
     const data = await postJSON("/api/game/hint");
-    scoreEl.textContent = `Score: ${data.score}`;
     if (data.hint_word === null) {
       statusEl.textContent = "No hint available from here.";
+      btn.disabled = false;
       return;
     }
-    document.getElementById("word-input").value = data.hint_word;
-    statusEl.textContent = `Hint: '${data.hint_word}' (cost ${data.cost} points)`;
+    applyMoveResult(data, `Hint: '${data.hint_word}' (cost ${data.cost} points). `);
+    if (!data.won) btn.disabled = false;
   } catch (err) {
     statusEl.textContent = err.message;
+    btn.disabled = false;
   } finally {
     btn.textContent = originalText;
-    btn.disabled = false;
   }
 });
 

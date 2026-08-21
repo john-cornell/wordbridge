@@ -41,6 +41,20 @@ def test_is_won_false_when_played_words_form_disconnected_islands(tiny_model):
     assert chain.is_won() is False
 
 
+def test_closest_unconnected_pair_with_no_steps_is_start_and_target(tiny_model):
+    chain = Chain(tiny_model, start_word="cat", target_word="auto", threshold=0.5)
+    assert chain.closest_unconnected_pair() == ("cat", "auto")
+
+
+def test_closest_unconnected_pair_prefers_the_closest_cross_component_bridge(tiny_model):
+    # After "dog" (joins cat's component), the closest still-unconnected pair
+    # should be dog<->auto (0.11), not cat<->auto (0.0).
+    chain = Chain(tiny_model, start_word="cat", target_word="auto", threshold=0.5)
+    chain.add_word("dog")
+    anchor, other = chain.closest_unconnected_pair()
+    assert {anchor, other} == {"dog", "auto"}
+
+
 def test_winning_connection_returns_none_when_not_won(tiny_model):
     chain = Chain(tiny_model, start_word="cat", target_word="auto", threshold=0.5)
     chain.add_word("dog")
