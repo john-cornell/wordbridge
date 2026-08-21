@@ -9,7 +9,7 @@ _TOKEN_RE = re.compile(r"^[a-z]+$")
 class WordVectorModel:
     """Wraps a gensim KeyedVectors instance with the operations Wordbridge needs."""
 
-    def __init__(self, keyed_vectors, vocab_limit=50000):
+    def __init__(self, keyed_vectors, vocab_limit=500000):
         filtered_words = [word for word in keyed_vectors.index_to_key if _TOKEN_RE.match(word)][:vocab_limit]
 
         # Rebuild as a real, much smaller KeyedVectors instead of just
@@ -76,7 +76,7 @@ class WordVectorModel:
         return None
 
 
-def load_google_news_model(vocab_limit=50000):
+def load_google_news_model(vocab_limit=500000):
     import gensim.downloader as api
 
     keyed_vectors = api.load("word2vec-google-news-300")
