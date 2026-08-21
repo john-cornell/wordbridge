@@ -29,14 +29,16 @@ class WordVectorModel:
                 return word_a, word_b
         return word_a, word_b
 
-    def find_route(self, from_word, to_word, max_hops=6, neighbors_per_hop=20, win_threshold=0.7):
+    def find_route(
+        self, from_word, to_word, max_hops=6, neighbors_per_hop=20, win_threshold=0.7, exclude=frozenset()
+    ):
         current = from_word
-        visited = {from_word}
+        visited = {from_word} | set(exclude)
         path = []
         for _ in range(max_hops):
             neighbors = [word for word, _ in self._kv.most_similar(current, topn=neighbors_per_hop)]
 
-            if to_word in neighbors:
+            if to_word in neighbors and to_word not in exclude:
                 path.append(to_word)
                 return path
 

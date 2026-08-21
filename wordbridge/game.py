@@ -73,17 +73,24 @@ class Chain:
             for i in range(len(path) - 1)
         ]
 
-    def _connection_path(self):
-        if not self.steps:
-            return None
+    def _known_words(self):
+        return [self.start_word, self.target_word] + [s.word for s in self.steps]
 
-        words = [self.start_word, self.target_word] + [s.word for s in self.steps]
+    def _build_adjacency(self, words):
         adjacency = {word: set() for word in words}
         for i, a in enumerate(words):
             for b in words[i + 1:]:
                 if a != b and self._model.similarity(a, b) >= self.threshold:
                     adjacency[a].add(b)
                     adjacency[b].add(a)
+        return adjacency
+
+    def _connection_path(self):
+        if not self.steps:
+            return None
+
+        words = self._known_words()
+        adjacency = self._build_adjacency(words)
 
         visited = {self.start_word}
         parent = {}
@@ -101,6 +108,50 @@ class Chain:
                 parent[neighbor] = word
                 frontier.append(neighbor)
         return None
+
+    def _components(self):
+        """Group start/target/played words into connected components at the current threshold."""
+        words = self._known_words()
+        adjacency = self._build_adjacency(words)
+
+        seen = set()
+        components = []
+        for word in words:
+            if word in seen:
+                continue
+            component = set()
+            frontier = [word]
+            while frontier:
+                current = frontier.pop()
+                if current in component:
+                    continue
+                component.add(current)
+                frontier.extend(adjacency[current] - component)
+            seen |= component
+            components.append(component)
+        return components
+
+    def closest_unconnected_pair(self):
+        """Find the most promising bridge: the highest-similarity pair of known
+        words spanning the start's component or the target's component to
+        anything outside it. Returns (anchor, other)."""
+        components = self._components()
+        start_component = next(c for c in components if self.start_word in c)
+        target_component = next(c for c in components if self.target_word in c)
+        all_words = self._known_words()
+
+        best_pair = None
+        best_similarity = None
+        for anchor_component in (start_component, target_component):
+            for anchor in anchor_component:
+                for other in all_words:
+                    if other in anchor_component:
+                        continue
+                    similarity = self._model.similarity(anchor, other)
+                    if best_similarity is None or similarity > best_similarity:
+                        best_similarity = similarity
+                        best_pair = (anchor, other)
+        return best_pair
 
     def is_over_soft_cap(self):
         return len(self.steps) > self.soft_cap

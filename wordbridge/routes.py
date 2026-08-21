@@ -13,6 +13,8 @@ from .game import Chain
 
 bp = Blueprint("routes", __name__)
 
+_SEARCH_PARAMS = dict(max_hops=8, neighbors_per_hop=40)
+
 
 def _get_model():
     return current_app.config["VECTOR_MODEL"]
@@ -22,6 +24,98 @@ def _get_db_conn():
     if "_db_conn" not in current_app.config:
         current_app.config["_db_conn"] = init_db(current_app.config["DB_PATH"])
     return current_app.config["_db_conn"]
+
+
+def _already_used_words(chain):
+    return {chain.start_word} | {step.word for step in chain.steps}
+
+
+def _find_hint_word(chain, model):
+    """Pick a single next word that makes real progress: bridge the closest
+    not-yet-connected pair of known points (from either the start's side or
+    the target's side), falling back to searching straight toward the target."""
+    exclude = _already_used_words(chain)
+    anchor, other = chain.closest_unconnected_pair()
+
+    bridge = model.find_route(anchor, other, exclude=exclude, win_threshold=chain.threshold, **_SEARCH_PARAMS)
+    if bridge is not None:
+        return bridge[0]
+
+    current_word = chain.steps[-1].word if chain.steps else chain.start_word
+    continuation = model.find_route(
+        current_word, chain.target_word, exclude=exclude, win_threshold=chain.threshold, **_SEARCH_PARAMS
+    )
+    if continuation is not None:
+        return continuation[0]
+
+    if current_word != chain.start_word:
+        fresh = model.find_route(
+            chain.start_word, chain.target_word, exclude=exclude, win_threshold=chain.threshold, **_SEARCH_PARAMS
+        )
+        if fresh is not None:
+            return fresh[0]
+
+    return None
+
+
+def _find_real_route(chain, model):
+    """Try hard to find an actual path from start to target that a player
+    could follow to win, trying several strategies in turn. Returns the full
+    path (including chain.start_word) or None if nothing was found."""
+    exclude = _already_used_words(chain)
+    current_word = chain.steps[-1].word if chain.steps else chain.start_word
+    played_words = [chain.start_word] + [step.word for step in chain.steps]
+
+    continuation = model.find_route(
+        current_word, chain.target_word, exclude=exclude, win_threshold=chain.threshold, **_SEARCH_PARAMS
+    )
+    if continuation is not None:
+        return played_words + continuation
+
+    if current_word != chain.start_word:
+        fresh = model.find_route(
+            chain.start_word, chain.target_word, exclude=exclude, win_threshold=chain.threshold, **_SEARCH_PARAMS
+        )
+        if fresh is not None:
+            return [chain.start_word] + fresh
+
+    anchor, other = chain.closest_unconnected_pair()
+    bridge = model.find_route(anchor, other, exclude=exclude, win_threshold=chain.threshold, **_SEARCH_PARAMS)
+    if bridge is not None:
+        onward = model.find_route(
+            bridge[-1],
+            chain.target_word,
+            exclude=exclude | set(bridge),
+            win_threshold=chain.threshold,
+            **_SEARCH_PARAMS,
+        )
+        if onward is not None:
+            return played_words + bridge + onward
+
+    return None
+
+
+def _apply_step_and_check_win(chain, step, conn):
+    winning_connection = chain.winning_connection()
+    won = winning_connection is not None
+    saved_to_high_scores = False
+    if won:
+        if not chain.gave_up_before:
+            save_attempt(conn, chain)
+            saved_to_high_scores = True
+        chain.mark_won()
+    return {
+        "word": step.word,
+        "neighbor_similarity": step.neighbor_similarity,
+        "target_similarity": step.target_similarity,
+        "is_digression": step.is_digression,
+        "similarities": step.similarities,
+        "winning_connection": winning_connection,
+        "score": chain.score(),
+        "won": won,
+        "saved_to_high_scores": saved_to_high_scores,
+        "over_soft_cap": chain.is_over_soft_cap(),
+    }
 
 
 @bp.get("/")
@@ -126,29 +220,24 @@ def add_word():
     # chain.completed is guaranteed False here (an already-completed chain
     # returns 400 above, before add_word is ever called), so this is the
     # first time this chain has met the win condition.
-    winning_connection = chain.winning_connection()
-    won = winning_connection is not None
-    saved_to_high_scores = False
-    if won:
-        if not chain.gave_up_before:
-            save_attempt(_get_db_conn(), chain)
-            saved_to_high_scores = True
-        chain.mark_won()
-
+    result = _apply_step_and_check_win(chain, step, _get_db_conn())
     session["chain"] = chain.to_dict()
 
-    return jsonify(
-        word=step.word,
-        neighbor_similarity=step.neighbor_similarity,
-        target_similarity=step.target_similarity,
-        is_digression=step.is_digression,
-        similarities=step.similarities,
-        winning_connection=winning_connection,
-        score=chain.score(),
-        won=won,
-        saved_to_high_scores=saved_to_high_scores,
-        over_soft_cap=chain.is_over_soft_cap(),
-    )
+    return jsonify(**result)
+
+
+@bp.get("/api/game/hint_cost")
+def hint_cost():
+    model = _get_model()
+    if "chain" not in session:
+        return jsonify(error="No game in progress"), 400
+
+    chain = Chain.from_dict(model, session["chain"])
+
+    if chain.completed:
+        return jsonify(error="This game is already complete — start a new game."), 400
+
+    return jsonify(cost=chain.next_hint_cost())
 
 
 @bp.post("/api/game/hint")
@@ -162,29 +251,16 @@ def hint():
     if chain.completed:
         return jsonify(error="This game is already complete — start a new game."), 400
 
-    current_word = chain.steps[-1].word if chain.steps else chain.start_word
-    continuation = model.find_route(
-        current_word, chain.target_word, max_hops=8, neighbors_per_hop=40, win_threshold=chain.threshold
-    )
-
-    if not continuation and current_word != chain.start_word:
-        # Wherever the player currently is leads nowhere — fall back to a
-        # real route from the true start rather than reporting no hint at all.
-        continuation = model.find_route(
-            chain.start_word,
-            chain.target_word,
-            max_hops=8,
-            neighbors_per_hop=40,
-            win_threshold=chain.threshold,
-        )
-
-    if not continuation:
+    hint_word = _find_hint_word(chain, model)
+    if hint_word is None:
         return jsonify(hint_word=None, cost=0, score=chain.score())
 
     cost = chain.use_hint()
+    step = chain.add_word(hint_word)
+    result = _apply_step_and_check_win(chain, step, _get_db_conn())
     session["chain"] = chain.to_dict()
 
-    return jsonify(hint_word=continuation[0], cost=cost, score=chain.score())
+    return jsonify(hint_word=hint_word, cost=cost, **result)
 
 
 @bp.post("/api/game/give_up")
@@ -199,25 +275,7 @@ def give_up():
         return jsonify(error="This game is already complete — start a new game."), 400
 
     best_step = chain.best_step()
-    current_word = chain.steps[-1].word if chain.steps else chain.start_word
-    played_words = [chain.start_word] + [step.word for step in chain.steps]
-
-    suggested_continuation = model.find_route(
-        current_word, chain.target_word, max_hops=8, neighbors_per_hop=40, win_threshold=chain.threshold
-    )
-    if suggested_continuation is not None:
-        route = played_words + suggested_continuation
-    else:
-        # Wherever the player wandered to didn't lead anywhere — try a fresh
-        # route from the true start instead of just echoing their dead end.
-        fresh_route = model.find_route(
-            chain.start_word,
-            chain.target_word,
-            max_hops=8,
-            neighbors_per_hop=40,
-            win_threshold=chain.threshold,
-        )
-        route = [chain.start_word] + fresh_route if fresh_route is not None else played_words
+    route = _find_real_route(chain, model)
 
     chain.mark_given_up()
     session["chain"] = chain.to_dict()
