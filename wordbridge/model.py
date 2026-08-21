@@ -1,6 +1,8 @@
 import random
 import re
 
+from gensim.models import KeyedVectors
+
 _TOKEN_RE = re.compile(r"^[a-z]+$")
 
 
@@ -8,13 +10,22 @@ class WordVectorModel:
     """Wraps a gensim KeyedVectors instance with the operations Wordbridge needs."""
 
     def __init__(self, keyed_vectors, vocab_limit=50000):
-        self._kv = keyed_vectors
-        self._filtered_vocab = self._build_filtered_vocab(vocab_limit)
-        self._filtered_vocab_set = set(self._filtered_vocab)
+        filtered_words = [word for word in keyed_vectors.index_to_key if _TOKEN_RE.match(word)][:vocab_limit]
 
-    def _build_filtered_vocab(self, vocab_limit):
-        filtered = [word for word in self._kv.index_to_key if _TOKEN_RE.match(word)]
-        return filtered[:vocab_limit]
+        # Rebuild as a real, much smaller KeyedVectors instead of just
+        # filtering a Python list — vocab_limit previously only trimmed
+        # candidate selection while the full multi-million-word matrix (plus
+        # a same-sized normalized copy gensim lazily builds on the first
+        # similarity/most_similar call) stayed resident regardless. That
+        # combination OOM-killed an 8GB production VPS on its first real
+        # game. This cuts actual memory from ~7GB to well under 200MB by
+        # never holding more vectors than the app can ever use.
+        small_kv = KeyedVectors(vector_size=keyed_vectors.vector_size)
+        small_kv.add_vectors(filtered_words, keyed_vectors[filtered_words])
+
+        self._kv = small_kv
+        self._filtered_vocab = filtered_words
+        self._filtered_vocab_set = set(filtered_words)
 
     def contains(self, word):
         return word in self._kv
