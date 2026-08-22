@@ -48,6 +48,34 @@ def test_random_pair_resamples_when_first_pick_is_already_too_similar(tiny_model
     assert (word_a, word_b) == ("cat", "car")
 
 
+def test_random_pair_pool_size_restricts_sampling_to_the_first_n_words(tiny_model):
+    # tiny_model._filtered_vocab is ["cat", "dog", "car", "auto"], in that
+    # order. pool_size=2 must never draw "car" or "auto".
+    for _ in range(20):
+        word_a, word_b = tiny_model.random_pair(rng=random.Random(), pool_size=2, max_similarity=1.1)
+        assert {word_a, word_b} == {"cat", "dog"}
+
+
+def test_find_route_stops_once_the_deadline_passes():
+    # A deadline already in the past must abort before the first hop's
+    # (comparatively expensive) most_similar call, returning None rather
+    # than doing any real search work.
+    angles_deg = {"start": 0, "near": 18.1949, "far": 60, "target": 90}
+    words = list(angles_deg.keys())
+    vectors = np.array([[np.cos(np.radians(a)), np.sin(np.radians(a))] for a in angles_deg.values()])
+    kv = KeyedVectors(vector_size=2)
+    kv.add_vectors(words, vectors)
+    model = WordVectorModel(kv, vocab_limit=10)
+
+    import time
+
+    route = model.find_route(
+        "start", "target", max_hops=6, neighbors_per_hop=2, win_threshold=0.7, deadline=time.monotonic() - 1
+    )
+
+    assert route is None
+
+
 def test_find_route_returns_direct_route_when_target_is_nearest_neighbor(tiny_model):
     route = tiny_model.find_route("cat", "dog")
     assert route == ["dog"]

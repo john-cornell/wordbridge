@@ -1,5 +1,6 @@
 import random
 import re
+import time
 
 from gensim.models import KeyedVectors
 
@@ -41,15 +42,31 @@ class WordVectorModel:
     def similarity(self, word_a, word_b):
         return float(self._kv.similarity(word_a, word_b))
 
-    def random_pair(self, rng=random, max_similarity=0.7, max_attempts=20):
+    def random_pair(self, rng=random, max_similarity=0.7, max_attempts=20, pool_size=None):
+        # index_to_key (and so _filtered_vocab, which preserves its order) is
+        # frequency-ranked, most common first. Widening vocab_limit to give
+        # hints/manual-mode/search more words to work with also widens random
+        # pair selection into much rarer words by default — rare words have
+        # sparse, poorly-connected neighborhoods, which is what made most
+        # random games fail to find any route at all once vocab_limit grew
+        # past ~100k. pool_size lets callers keep pair selection in the
+        # dense, well-connected common-word range regardless of vocab_limit.
+        pool = self._filtered_vocab[:pool_size] if pool_size else self._filtered_vocab
         for _ in range(max_attempts):
-            word_a, word_b = rng.sample(self._filtered_vocab, 2)
+            word_a, word_b = rng.sample(pool, 2)
             if self.similarity(word_a, word_b) < max_similarity:
                 return word_a, word_b
         return word_a, word_b
 
     def find_route(
-        self, from_word, to_word, max_hops=6, neighbors_per_hop=20, win_threshold=0.7, exclude=frozenset()
+        self,
+        from_word,
+        to_word,
+        max_hops=6,
+        neighbors_per_hop=20,
+        win_threshold=0.7,
+        exclude=frozenset(),
+        deadline=None,
     ):
         current = from_word
         current_similarity = self._kv.similarity(current, to_word)
@@ -59,6 +76,13 @@ class WordVectorModel:
         visited = {from_word} | set(exclude)
         path = []
         for _ in range(max_hops):
+            # Checked before paying for the (comparatively expensive)
+            # most_similar call below — real per-call cost varies a lot by
+            # hardware, so this is the actual mechanism that keeps a single
+            # search call bounded, not just an attempt count.
+            if deadline is not None and time.monotonic() >= deadline:
+                return None
+
             neighbors = [word for word, _ in self._kv.most_similar(current, topn=neighbors_per_hop)]
 
             # A candidate must actually clear win_threshold against the word
