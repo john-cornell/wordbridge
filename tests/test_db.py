@@ -53,6 +53,64 @@ def test_save_and_list_attempt(tiny_model):
     assert attempts[0]["score"] == chain.score()
 
 
+def test_save_attempt_stores_player_name(tiny_model):
+    conn = init_db(":memory:")
+    chain = Chain(tiny_model, start_word="cat", target_word="auto", threshold=0.5)
+    chain.add_word("auto")
+
+    save_attempt(conn, chain, player_name="Alice")
+
+    assert list_attempts(conn)[0]["player_name"] == "Alice"
+    assert list_high_scores(conn)[0]["player_name"] == "Alice"
+
+
+def test_save_attempt_without_player_name_defaults_to_none(tiny_model):
+    conn = init_db(":memory:")
+    chain = Chain(tiny_model, start_word="cat", target_word="auto", threshold=0.5)
+    chain.add_word("auto")
+
+    save_attempt(conn, chain)
+
+    assert list_attempts(conn)[0]["player_name"] is None
+
+
+def test_init_db_migrates_an_existing_table_without_player_name_column(tmp_path):
+    import sqlite3
+
+    db_path = str(tmp_path / "legacy.db")
+
+    # Build a database with the pre-player_name schema, as if created by an
+    # older version of this app.
+    legacy_conn = sqlite3.connect(db_path)
+    legacy_conn.execute(
+        """
+        CREATE TABLE attempts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            start_word TEXT NOT NULL,
+            target_word TEXT NOT NULL,
+            chain_json TEXT NOT NULL,
+            num_digressions INTEGER NOT NULL,
+            score INTEGER NOT NULL,
+            created_at TEXT NOT NULL
+        )
+        """
+    )
+    legacy_conn.execute(
+        "INSERT INTO attempts (start_word, target_word, chain_json, num_digressions, score, created_at) "
+        "VALUES ('cat', 'auto', '[]', 0, 100, '2026-01-01T00:00:00')"
+    )
+    legacy_conn.commit()
+    legacy_conn.close()
+
+    # init_db must not crash against this older schema, and must add the
+    # missing column so existing rows remain readable.
+    conn = init_db(db_path)
+    attempts = list_attempts(conn)
+
+    assert len(attempts) == 1
+    assert attempts[0]["player_name"] is None
+
+
 def test_connection_can_be_used_across_threads(tiny_model):
     conn = init_db(":memory:")
     chain = Chain(tiny_model, start_word="cat", target_word="auto", threshold=0.5)

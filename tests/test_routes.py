@@ -464,6 +464,40 @@ def test_high_scores_includes_win_with_source_dest_score_and_date(client):
     assert entry["target_word"] == "auto"
     assert entry["score"] == 100  # par 1, 1 word used, no digressions/hints -> 100*1/1
     assert "created_at" in entry
+    assert entry["player_name"] is None
+
+
+def test_high_scores_includes_the_player_name_set_before_winning(client):
+    client.post("/api/player_name", json={"name": "Alice"})
+    client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
+    client.post("/api/game/threshold", json={"threshold": 0.05})
+    client.post("/api/game/word", json={"word": "dog"})  # wins
+
+    entry = client.get("/api/high_scores").get_json()["scores"][0]
+    assert entry["player_name"] == "Alice"
+
+
+def test_get_player_name_defaults_to_null(client):
+    response = client.get("/api/player_name")
+    assert response.get_json() == {"name": None}
+
+
+def test_set_player_name_then_get_returns_it(client):
+    response = client.post("/api/player_name", json={"name": "  Bob  "})
+    assert response.get_json() == {"name": "Bob"}
+    assert client.get("/api/player_name").get_json() == {"name": "Bob"}
+
+
+def test_set_player_name_truncates_overly_long_names(client):
+    response = client.post("/api/player_name", json={"name": "x" * 50})
+    assert response.get_json() == {"name": "x" * 30}
+
+
+def test_set_player_name_to_blank_clears_it(client):
+    client.post("/api/player_name", json={"name": "Bob"})
+    response = client.post("/api/player_name", json={"name": "   "})
+    assert response.get_json() == {"name": None}
+    assert client.get("/api/player_name").get_json() == {"name": None}
 
 
 def test_clear_high_scores_empties_both_high_scores_and_history(client):

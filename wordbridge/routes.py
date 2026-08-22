@@ -17,6 +17,7 @@ _SEARCH_PARAMS = dict(max_hops=8, neighbors_per_hop=40)
 _PAR_SEARCH_PARAMS = dict(max_hops=10, neighbors_per_hop=60)
 _PAR_FALLBACK_SEARCH_PARAMS = dict(max_hops=15, neighbors_per_hop=100)
 _PAR_REROLL_ATTEMPTS = 20
+_MAX_PLAYER_NAME_LENGTH = 30
 
 
 def _get_model():
@@ -83,7 +84,7 @@ def _apply_step_and_check_win(chain, step, conn):
     saved_to_high_scores = False
     if won:
         if not chain.gave_up_before:
-            save_attempt(conn, chain)
+            save_attempt(conn, chain, player_name=session.get("player_name"))
             saved_to_high_scores = True
         chain.mark_won()
     return {
@@ -115,6 +116,24 @@ def scores_page():
 @bp.get("/api/health")
 def health():
     return jsonify(status="ok")
+
+
+@bp.get("/api/player_name")
+def get_player_name():
+    return jsonify(name=session.get("player_name"))
+
+
+@bp.post("/api/player_name")
+def set_player_name():
+    payload = request.get_json(force=True) or {}
+    if not isinstance(payload, dict):
+        payload = {}
+    name = payload.get("name", "").strip()[:_MAX_PLAYER_NAME_LENGTH] or None
+
+    session.permanent = True
+    session["player_name"] = name
+
+    return jsonify(name=name)
 
 
 @bp.post("/api/game/new")
