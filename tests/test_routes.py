@@ -27,7 +27,7 @@ def test_new_game_manual_mode_accepts_known_words(client):
         "target_word": "auto",
         "start_target_similarity": 0.0,
         "threshold": 0.5,
-        "par_length": 1,  # "auto" is trivially within reach of "cat" in the tiny fixture vocab
+        "par_length": None,  # cat's and auto's components don't connect at all at the default 0.5 threshold
     }
 
 
@@ -51,7 +51,7 @@ def test_set_threshold_updates_chain_before_any_word_added(client):
     response = client.post("/api/game/threshold", json={"threshold": 0.01})
 
     assert response.status_code == 200
-    assert response.get_json() == {"threshold": 0.01}
+    assert response.get_json() == {"threshold": 0.01, "par_length": 2}
 
     # A threshold this low should now make even a weak similarity a win.
     word_response = client.post("/api/game/word", json={"word": "dog"})
@@ -136,7 +136,7 @@ def test_restart_clears_chain(client):
         "target_word": "auto",
         "start_target_similarity": 0.0,
         "threshold": 0.5,
-        "par_length": 1,
+        "par_length": None,
     }
 
 
@@ -269,6 +269,7 @@ def test_hint_cost_peeks_without_charging_or_applying_anything(client):
 
 def test_hint_cost_reflects_escalating_price_after_a_real_hint(client):
     client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
+    client.post("/api/game/threshold", json={"threshold": 0.11})
     client.post("/api/game/hint")
 
     peek = client.get("/api/game/hint_cost").get_json()
@@ -277,9 +278,8 @@ def test_hint_cost_reflects_escalating_price_after_a_real_hint(client):
 
 def test_hint_never_suggests_a_word_already_on_the_board(client):
     client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
+    client.post("/api/game/threshold", json={"threshold": 0.11})
 
-    # The target itself ("auto") is fair game for a first hint — it's the
-    # destination, not something already played.
     first = client.post("/api/game/hint").get_json()
     assert first["hint_word"] != "cat"
 
@@ -290,51 +290,38 @@ def test_hint_never_suggests_a_word_already_on_the_board(client):
 
 def test_hint_reveals_next_word_and_charges_five_points(client):
     client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
+    # 0.11 sits between dog-auto (~0.1098, must stay disconnected) and
+    # dog-car (~0.1104, must connect) — the only threshold in this fixture
+    # where a genuine multi-hop route (cat->dog->car->auto) exists without
+    # an instant win via dog alone.
+    client.post("/api/game/threshold", json={"threshold": 0.11})
 
     response = client.post("/api/game/hint")
     data = response.get_json()
 
     assert response.status_code == 200
-    assert data["hint_word"] == "auto"
+    # "dog" is the real first hop of the threshold-respecting route now —
+    # not "auto" (the old rank-only bug jumped straight to the literal
+    # target even though cat-auto has zero actual similarity).
+    assert data["hint_word"] == "dog"
     assert data["cost"] == 5
-    assert data["score"] == 33  # par 1: effective_words = 1 step + 2 for the hint -> 100*1/3
+    assert data["score"] == 100  # par 3 (cat->dog->car->auto): 1 step + 2 for the hint -> 100*3/3
     # The hint is applied as a real move, not just suggested.
-    assert data["word"] == "auto"
+    assert data["word"] == "dog"
 
 
 def test_hint_cost_doubles_on_repeated_use(client):
     client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
+    client.post("/api/game/threshold", json={"threshold": 0.11})
 
     first = client.post("/api/game/hint").get_json()
     second = client.post("/api/game/hint").get_json()
 
     assert first["cost"] == 5
+    assert second["hint_word"] == "car"
     assert second["cost"] == 10
-    # par 1: effective_words = 2 steps + 1 digression + 4 for two hints -> 100*1/7
-    assert second["score"] == 14
-
-
-def test_hint_falls_back_to_route_from_start_when_current_position_is_a_dead_end(
-    client, tiny_model, monkeypatch
-):
-    real_find_route = tiny_model.find_route
-
-    def fake_find_route(from_word, to_word, **kwargs):
-        if from_word == "dog":
-            return None  # wherever the player wandered to leads nowhere
-        return real_find_route(from_word, to_word, **kwargs)
-
-    monkeypatch.setattr(tiny_model, "find_route", fake_find_route)
-
-    client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
-    client.post("/api/game/word", json={"word": "dog"})
-
-    response = client.post("/api/game/hint")
-    data = response.get_json()
-
-    assert response.status_code == 200
-    assert data["hint_word"] == "auto"  # first step of a fresh route from "cat", not "dog"
-    assert data["cost"] == 5
+    # par 3: effective_words = 2 steps + 0 digressions + 4 for two hints -> 100*3/6
+    assert second["score"] == 50
 
 
 def test_hint_rejected_on_completed_chain(client):
@@ -379,19 +366,21 @@ def test_give_up_returns_best_word_and_similarity(client):
 
 def test_give_up_response_includes_route_to_target(client):
     client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
+    client.post("/api/game/threshold", json={"threshold": 0.11})
 
     response = client.post("/api/game/give_up")
     data = response.get_json()
 
     assert response.status_code == 200
-    assert data["route"] == ["cat", "auto"]
+    assert data["route"] == ["cat", "dog", "car", "auto"]
 
 
 def test_give_up_route_is_none_when_no_real_path_can_be_found_anywhere(
     client, tiny_model, monkeypatch
 ):
-    # Every search strategy fails — give_up must not fall back to echoing
-    # the player's own dead-end path as if it were a solution.
+    # No route can be established when the puzzle is created — give_up must
+    # reveal that honestly rather than echo the player's own dead-end path
+    # as if it were a solution.
     monkeypatch.setattr(tiny_model, "find_route", lambda *args, **kwargs: None)
     client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
     client.post("/api/game/word", json={"word": "dog"})
@@ -403,38 +392,19 @@ def test_give_up_route_is_none_when_no_real_path_can_be_found_anywhere(
     assert data["route"] is None
 
 
-def test_give_up_falls_back_to_route_from_start_when_current_position_is_a_dead_end(
-    client, tiny_model, monkeypatch
-):
-    real_find_route = tiny_model.find_route
-
-    def fake_find_route(from_word, to_word, **kwargs):
-        if from_word == "dog":
-            return None  # wherever the player wandered to leads nowhere
-        return real_find_route(from_word, to_word, **kwargs)
-
-    monkeypatch.setattr(tiny_model, "find_route", fake_find_route)
-
+def test_give_up_route_is_the_precomputed_solution_regardless_of_what_was_played(client):
+    # The give-up route is decided once, when the puzzle is created — it's
+    # not re-derived from wherever the player actually wandered to. Playing
+    # a word that ISN'T part of that route must not change what's revealed.
     client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
-    client.post("/api/game/word", json={"word": "dog"})
+    client.post("/api/game/threshold", json={"threshold": 0.11})
+    client.post("/api/game/word", json={"word": "car"})
 
     response = client.post("/api/game/give_up")
     data = response.get_json()
 
     assert response.status_code == 200
-    # A real route from the true start ("cat"), not the player's dead-end ("dog").
-    assert data["route"] == ["cat", "auto"]
-
-
-def test_give_up_route_includes_words_already_played(client):
-    client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
-    client.post("/api/game/word", json={"word": "dog"})
-
-    response = client.post("/api/game/give_up")
-    data = response.get_json()
-
-    assert response.status_code == 200
-    assert data["route"] == ["cat", "dog", "auto"]
+    assert data["route"] == ["cat", "dog", "car", "auto"]
 
 
 def test_give_up_locks_chain_against_further_add_word(client):

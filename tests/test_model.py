@@ -1,5 +1,8 @@
 import random
 
+import numpy as np
+from gensim.models import KeyedVectors
+
 from wordbridge.model import WordVectorModel
 
 
@@ -56,10 +59,33 @@ def test_find_route_returns_none_when_no_route_found_within_hop_cap(tiny_model):
 
 
 def test_find_route_never_returns_an_excluded_word(tiny_model):
-    # "dog" is cat's literal nearest neighbor and would normally be the
-    # answer — excluding it forces the search to find a real alternative.
+    # "dog" is cat's only real (above-threshold) connection in the tiny
+    # fixture — cat-car and cat-auto are exactly 0 similarity. Excluding
+    # dog must not fall back to a fake route through disconnected words
+    # (the old rank-only bug would have); it must correctly report none.
     route = tiny_model.find_route("cat", "auto", exclude={"dog"})
-    assert "dog" not in route
+    assert route is None
+
+
+def test_find_route_only_hops_through_connections_that_clear_the_threshold():
+    # "far" is much closer to the target than "near" is, but far is NOT
+    # validly connected to "start" at this threshold (0.5 < 0.7) — only
+    # rank-nearest, not threshold-connected. Picking it directly (as the
+    # old rank-only logic did) would suggest a hop the graph itself would
+    # never draw an edge for. The route must detour through "near" (which
+    # IS validly connected to start) before reaching "far", and must
+    # explicitly land on the literal target word at the end rather than
+    # stopping one word short of it.
+    angles_deg = {"start": 0, "near": 18.1949, "far": 60, "target": 90}
+    words = list(angles_deg.keys())
+    vectors = np.array([[np.cos(np.radians(a)), np.sin(np.radians(a))] for a in angles_deg.values()])
+    kv = KeyedVectors(vector_size=2)
+    kv.add_vectors(words, vectors)
+    model = WordVectorModel(kv, vocab_limit=10)
+
+    route = model.find_route("start", "target", max_hops=6, neighbors_per_hop=2, win_threshold=0.7)
+
+    assert route == ["near", "far", "target"]
 
 
 def test_find_route_does_not_use_the_destination_shortcut_when_destination_excluded(tiny_model):

@@ -291,6 +291,12 @@ h1 {
   stroke: #a05e10;
 }
 
+.node circle.node-suggested {
+  fill: #9ca3af;
+  stroke: #6b7280;
+  stroke-dasharray: 3, 2;
+}
+
 .node text {
   font-size: 14px;
   fill: #fff;
@@ -304,6 +310,11 @@ h1 {
 
 .edge.edge-winning {
   stroke: var(--success);
+}
+
+.edge.edge-suggested {
+  stroke: #f59e0b;
+  stroke-dasharray: 6, 4;
 }
 
 .edge-label {
