@@ -24,6 +24,7 @@ class ChainGraph {
     this.edgeEls = new Map();
     this.edgeLabelEls = new Map();
     this._winningEdges = new Set();
+    this._suggestedEdges = new Set();
     this._nodesByWord = new Map();
     this._nextId = 1;
     this.dragNode = null;
@@ -42,6 +43,7 @@ class ChainGraph {
     this.edgeEls.clear();
     this.edgeLabelEls.clear();
     this._winningEdges = new Set();
+    this._suggestedEdges = new Set();
     this._nodesByWord.clear();
     this._nextId = 1;
     this.dragNode = null;
@@ -104,6 +106,42 @@ class ChainGraph {
     this._renderEdges();
   }
 
+  showSuggestedRoute(route) {
+    if (!route || route.length < 2) return;
+
+    const routeNodes = route.map((word) => this._getOrCreateNode(word));
+    for (let i = 0; i < routeNodes.length - 1; i++) {
+      const a = routeNodes[i];
+      const b = routeNodes[i + 1];
+      let edge = this._findEdgeForWordPair(a.word, b.word);
+      if (!edge) {
+        edge = { aId: a.id, bId: b.id, similarity: 1 };
+        this.edges.push(edge);
+        this._createEdgeEl(edge);
+      }
+      this._suggestedEdges.add(edge);
+    }
+    this._renderEdges();
+  }
+
+  _getOrCreateNode(word) {
+    const existingIds = this._nodesByWord.get(word);
+    if (existingIds && existingIds.length) {
+      return this._nodeById(existingIds[existingIds.length - 1]);
+    }
+    const anchor = this.nodes[this.nodes.length - 1];
+    const rawX = anchor ? anchor.x + (Math.random() - 0.5) * 60 : this.width / 2;
+    const rawY = anchor ? anchor.y + (Math.random() - 0.5) * 60 : this.height / 2;
+    const x = Math.max(NODE_RADIUS, Math.min(this.width - NODE_RADIUS, rawX));
+    const y = Math.max(NODE_RADIUS, Math.min(this.height - NODE_RADIUS, rawY));
+
+    const node = this._makeNode(word, x, y, false);
+    node.isSuggested = true;
+    this.nodes.push(node);
+    this._createNodeEl(node);
+    return node;
+  }
+
   _findEdgeForWordPair(wordA, wordB) {
     for (const edge of this.edges) {
       const a = this._nodeById(edge.aId);
@@ -126,6 +164,7 @@ class ChainGraph {
       vy: 0,
       pinned,
       isDigression: false,
+      isSuggested: false,
       neighborSimilarity: null,
       targetSimilarity: null,
     };
@@ -179,6 +218,7 @@ class ChainGraph {
     if (!els) return;
     els.circle.classList.toggle("node-pinned", node.pinned);
     els.circle.classList.toggle("node-digression", node.isDigression);
+    els.circle.classList.toggle("node-suggested", node.isSuggested);
   }
 
   _createEdgeEl(edge) {
@@ -195,9 +235,11 @@ class ChainGraph {
     if (!line || !a || !b) return;
 
     const isWinning = this._winningEdges.has(edge);
-    const visible = edge.similarity >= this.threshold || isWinning;
+    const isSuggested = this._suggestedEdges.has(edge);
+    const visible = edge.similarity >= this.threshold || isWinning || isSuggested;
     line.style.display = visible ? "" : "none";
     line.classList.toggle("edge-winning", isWinning);
+    line.classList.toggle("edge-suggested", isSuggested);
     if (!visible) {
       this._removeEdgeLabel(edge);
       return;
@@ -212,6 +254,10 @@ class ChainGraph {
       line.setAttribute("stroke-width", MAX_EDGE_WIDTH.toFixed(2));
       line.style.opacity = "1";
       this._renderEdgeLabel(edge, a, b);
+    } else if (isSuggested) {
+      line.setAttribute("stroke-width", MAX_EDGE_WIDTH.toFixed(2));
+      line.style.opacity = "1";
+      this._removeEdgeLabel(edge);
     } else {
       const range = Math.max(maxSimilarity - this.threshold, 0.0001);
       const normalized = Math.min(1, Math.max(0, (edge.similarity - this.threshold) / range));

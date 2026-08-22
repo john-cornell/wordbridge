@@ -61,53 +61,20 @@ def _find_hint_word(chain, model):
     return None
 
 
-def _find_real_route(chain, model):
-    """Try hard to find an actual path from start to target that a player
-    could follow to win, trying several strategies in turn. Returns the full
-    path (including chain.start_word) or None if nothing was found."""
-    exclude = _already_used_words(chain)
-    current_word = chain.steps[-1].word if chain.steps else chain.start_word
-    played_words = [chain.start_word] + [step.word for step in chain.steps]
-
-    continuation = model.find_route(
-        current_word, chain.target_word, exclude=exclude, win_threshold=chain.threshold, **_SEARCH_PARAMS
-    )
-    if continuation is not None:
-        return played_words + continuation
-
-    if current_word != chain.start_word:
-        fresh = model.find_route(
-            chain.start_word, chain.target_word, exclude=exclude, win_threshold=chain.threshold, **_SEARCH_PARAMS
-        )
-        if fresh is not None:
-            return [chain.start_word] + fresh
-
-    anchor, other = chain.closest_unconnected_pair()
-    bridge = model.find_route(anchor, other, exclude=exclude, win_threshold=chain.threshold, **_SEARCH_PARAMS)
-    if bridge is not None:
-        onward = model.find_route(
-            bridge[-1],
-            chain.target_word,
-            exclude=exclude | set(bridge),
-            win_threshold=chain.threshold,
-            **_SEARCH_PARAMS,
-        )
-        if onward is not None:
-            return played_words + bridge + onward
-
-    return None
-
-
-def _compute_par(model, start_word, target_word, threshold):
-    """Establish the puzzle's par: the shortest real route length the model
-    can find between start and target at this threshold. Tries a generous
-    search first, then an even more expensive one before giving up."""
+def _compute_solution_route(model, start_word, target_word, threshold):
+    """Find the actual shortest real route the model can find between start
+    and target at this threshold, computed once when the puzzle is created.
+    Both par (score baseline) and the give-up reveal reuse this same route,
+    rather than re-searching from wherever the player currently is — that
+    re-searching was what produced disconnected/incomplete give-up routes.
+    Tries a generous search first, then an even more expensive one before
+    giving up. Returns the full path including start_word, or None."""
     route = model.find_route(start_word, target_word, win_threshold=threshold, **_PAR_SEARCH_PARAMS)
     if route is None:
         route = model.find_route(
             start_word, target_word, win_threshold=threshold, **_PAR_FALLBACK_SEARCH_PARAMS
         )
-    return len(route) if route is not None else None
+    return [start_word] + route if route is not None else None
 
 
 def _apply_step_and_check_win(chain, step, conn):
@@ -167,17 +134,19 @@ def new_game():
         if not model.contains(word2):
             return jsonify(error=f"'{word2}' is not a recognized word"), 400
         start_word, target_word = word1, word2
-        par_length = _compute_par(model, start_word, target_word, threshold)
+        solution_route = _compute_solution_route(model, start_word, target_word, threshold)
     else:
         start_word = target_word = None
-        par_length = None
+        solution_route = None
         for _ in range(_PAR_REROLL_ATTEMPTS):
             start_word, target_word = model.random_pair()
-            par_length = _compute_par(model, start_word, target_word, threshold)
-            if par_length is not None:
+            solution_route = _compute_solution_route(model, start_word, target_word, threshold)
+            if solution_route is not None:
                 break
         # If every reroll failed to find a route, the last-rolled pair is
         # kept and Chain.score() falls back to the legacy formula.
+
+    par_length = len(solution_route) - 1 if solution_route is not None else None
 
     chain = Chain(
         model,
@@ -185,6 +154,7 @@ def new_game():
         target_word=target_word,
         threshold=threshold,
         par_length=par_length,
+        solution_route=solution_route,
     )
     session["chain"] = chain.to_dict()
 
@@ -219,10 +189,12 @@ def set_threshold():
         return jsonify(error="threshold must be between 0 and 1"), 400
 
     chain.threshold = threshold
+    chain.solution_route = _compute_solution_route(model, chain.start_word, chain.target_word, threshold)
+    chain.par_length = len(chain.solution_route) - 1 if chain.solution_route is not None else None
     session["chain"] = chain.to_dict()
     set_last_threshold(_get_db_conn(), threshold)
 
-    return jsonify(threshold=chain.threshold)
+    return jsonify(threshold=chain.threshold, par_length=chain.par_length)
 
 
 @bp.post("/api/game/word")
@@ -310,7 +282,6 @@ def give_up():
         return jsonify(error="This game is already complete — start a new game."), 400
 
     best_step = chain.best_step()
-    route = _find_real_route(chain, model)
 
     chain.mark_given_up()
     session["chain"] = chain.to_dict()
@@ -319,7 +290,7 @@ def give_up():
         given_up=True,
         best_word=best_step.word if best_step else None,
         best_similarity=best_step.target_similarity if best_step else None,
-        route=route,
+        route=chain.solution_route,
     )
 
 

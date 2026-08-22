@@ -26,7 +26,11 @@ function applyThreshold(value) {
 
 async function persistThreshold(value) {
   try {
-    await postJSON("/api/game/threshold", { threshold: Number(value) });
+    const data = await postJSON("/api/game/threshold", { threshold: Number(value) });
+    parInfoEl.textContent =
+      typeof data.par_length === "number"
+        ? `Shortest path found: ${data.par_length} word${data.par_length === 1 ? "" : "s"}`
+        : "";
   } catch (err) {
     statusEl.textContent = err.message;
   }
@@ -240,6 +244,7 @@ document.getElementById("give-up-btn").addEventListener("click", async () => {
     }
     if (data.route) {
       message += ` A possible route: ${data.route.join(" → ")}.`;
+      chainGraph.showSuggestedRoute(data.route);
     }
     statusEl.textContent = message;
   } catch (err) {

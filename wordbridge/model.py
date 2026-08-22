@@ -9,7 +9,7 @@ _TOKEN_RE = re.compile(r"^[a-z]+$")
 class WordVectorModel:
     """Wraps a gensim KeyedVectors instance with the operations Wordbridge needs."""
 
-    def __init__(self, keyed_vectors, vocab_limit=100000):
+    def __init__(self, keyed_vectors, vocab_limit=500000):
         filtered_words = [word for word in keyed_vectors.index_to_key if _TOKEN_RE.match(word)][:vocab_limit]
 
         # Rebuild as a real, much smaller KeyedVectors instead of just
@@ -45,16 +45,26 @@ class WordVectorModel:
     ):
         current = from_word
         current_similarity = self._kv.similarity(current, to_word)
+        if to_word not in exclude and current_similarity >= win_threshold:
+            return [to_word]
+
         visited = {from_word} | set(exclude)
         path = []
         for _ in range(max_hops):
             neighbors = [word for word, _ in self._kv.most_similar(current, topn=neighbors_per_hop)]
 
-            if to_word in neighbors and to_word not in exclude:
-                path.append(to_word)
-                return path
-
-            candidates = [w for w in neighbors if w in self._filtered_vocab_set and w not in visited]
+            # A candidate must actually clear win_threshold against the word
+            # we're hopping FROM — matching the same threshold the graph
+            # itself uses to draw an edge. Being one of current's nearest
+            # neighbors by rank doesn't imply that; picking on rank alone
+            # produced routes the graph would never actually connect.
+            candidates = [
+                w
+                for w in neighbors
+                if w in self._filtered_vocab_set
+                and w not in visited
+                and self._kv.similarity(current, w) >= win_threshold
+            ]
             if not candidates:
                 return None
 
@@ -67,7 +77,13 @@ class WordVectorModel:
                 return None
 
             path.append(best)
-            if best_similarity >= win_threshold:
+            if best == to_word or best_similarity >= win_threshold:
+                # Reaching threshold-similarity to the target counts as a
+                # win even if `best` isn't literally the target word — make
+                # that explicit in the returned path instead of stopping one
+                # word short of the word the player was actually aiming for.
+                if best != to_word:
+                    path.append(to_word)
                 return path
 
             visited.add(best)
@@ -76,7 +92,7 @@ class WordVectorModel:
         return None
 
 
-def load_google_news_model(vocab_limit=100000):
+def load_google_news_model(vocab_limit=500000):
     import gensim.downloader as api
 
     keyed_vectors = api.load("word2vec-google-news-300")
