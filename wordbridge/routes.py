@@ -1,3 +1,5 @@
+import time
+
 from flask import Blueprint, current_app, jsonify, request, session
 
 from .db import (
@@ -15,8 +17,14 @@ bp = Blueprint("routes", __name__)
 
 _SEARCH_PARAMS = dict(max_hops=8, neighbors_per_hop=40)
 _PAR_SEARCH_PARAMS = dict(max_hops=10, neighbors_per_hop=60)
-_PAR_FALLBACK_SEARCH_PARAMS = dict(max_hops=15, neighbors_per_hop=100)
-_PAR_REROLL_ATTEMPTS = 20
+# Only a modest bump over the primary search, not a second, much bigger one —
+# a 20-reroll loop each paying for a 15-hop/100-neighbor fallback is exactly
+# what produced a 26-minute single request in production (worker timeout log,
+# 2026-08-22). Breadth (try a different pair) beats depth (search the same
+# pair harder) for cost control here.
+_PAR_FALLBACK_SEARCH_PARAMS = dict(max_hops=10, neighbors_per_hop=80)
+_PAR_REROLL_ATTEMPTS = 5
+_PAR_REROLL_DEADLINE_SECONDS = 5.0
 _MAX_PLAYER_NAME_LENGTH = 30
 
 
@@ -157,13 +165,16 @@ def new_game():
     else:
         start_word = target_word = None
         solution_route = None
+        deadline = time.monotonic() + _PAR_REROLL_DEADLINE_SECONDS
         for _ in range(_PAR_REROLL_ATTEMPTS):
             start_word, target_word = model.random_pair()
             solution_route = _compute_solution_route(model, start_word, target_word, threshold)
-            if solution_route is not None:
+            if solution_route is not None or time.monotonic() >= deadline:
                 break
-        # If every reroll failed to find a route, the last-rolled pair is
-        # kept and Chain.score() falls back to the legacy formula.
+        # If every reroll failed (or the wall-clock budget ran out first —
+        # a hard backstop against ever repeating a runaway request), the
+        # last-rolled pair is kept and Chain.score() falls back to the
+        # legacy formula.
 
     par_length = len(solution_route) - 1 if solution_route is not None else None
 
