@@ -18,10 +18,18 @@ class WordVectorModel:
         # a same-sized normalized copy gensim lazily builds on the first
         # similarity/most_similar call) stayed resident regardless. That
         # combination OOM-killed an 8GB production VPS on its first real
-        # game. This cuts actual memory from ~7GB to well under 200MB by
+        # game. This cuts actual memory from ~7GB to well under 1GB by
         # never holding more vectors than the app can ever use.
+        #
+        # Index the underlying array directly rather than keyed_vectors[words]
+        # — that goes through gensim's __getitem__, which does one Python-level
+        # get_vector() call per word. At 200k+ words that's ~170 SECONDS of
+        # pure interpreter overhead (confirmed: consistent gunicorn worker
+        # startup timeouts in production, every single boot). A single
+        # vectorized numpy index is milliseconds regardless of vocab size.
+        indices = [keyed_vectors.key_to_index[word] for word in filtered_words]
         small_kv = KeyedVectors(vector_size=keyed_vectors.vector_size)
-        small_kv.add_vectors(filtered_words, keyed_vectors[filtered_words])
+        small_kv.add_vectors(filtered_words, keyed_vectors.vectors[indices])
 
         self._kv = small_kv
         self._filtered_vocab = filtered_words
