@@ -88,15 +88,50 @@ sudo systemctl status wordbridge
 you asked about — systemd handles it natively, no separate script needed.
 It also starts the app automatically on reboot (`enable`).
 
-The app is now reachable at `http://<vps-ip>:8000`.
+Gunicorn is bound to `127.0.0.1:8000` — not reachable from outside the
+VPS on its own. **Continue to step 3 (nginx) before this is actually
+usable from the internet.**
 
-**Important:** `--workers 1` in the service file is deliberate, not a
-typo. Each gunicorn worker is a separate process that loads its own full
-copy of the word2vec model — running more than one worker multiplies RAM
-usage (2 workers ≈ 8GB+ just for vectors). One worker easily handles a
-low-traffic personal project.
+Each gunicorn worker is a separate process that loads its own full copy
+of the word2vec model, so worker count is a real memory tradeoff — at
+the current `vocab_limit` (~200k words) each worker uses well under 1GB,
+so `--workers 2` is affordable and gives real resilience: one worker
+stuck or slow doesn't block every other request. If `vocab_limit` is
+raised a lot in the future, re-check memory headroom before adding more
+workers.
 
-## 3. Updating after a code change
+## 3. Install nginx as a reverse proxy (required, not optional)
+
+Gunicorn's sync workers must never be exposed directly to the internet.
+Confirmed the hard way in production (2026-08-22, via `py-spy dump` on a
+frozen worker): the public internet constantly opens connections that
+never finish sending a valid HTTP request (scanners, bots, probes).
+Gunicorn's sync worker blocks *synchronously* trying to read that
+request — with a small number of workers, one such stalled connection
+can freeze the entire app for every real user until gunicorn's own
+`--timeout` watchdog eventually kills the whole worker. nginx is
+event-driven and absorbs stalled connections without blocking anything
+else; this is the standard, expected way to run gunicorn.
+
+```bash
+sudo apt install -y nginx
+sudo cp deploy/nginx-wordbridge.conf /etc/nginx/sites-available/wordbridge
+sudo ln -s /etc/nginx/sites-available/wordbridge /etc/nginx/sites-enabled/wordbridge
+sudo rm -f /etc/nginx/sites-enabled/default
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+Make sure your VPS's firewall/security group allows inbound port 80 (it
+no longer needs port 8000 open at all — gunicorn only listens on
+`127.0.0.1` now).
+
+The app is now reachable at `http://<vps-ip>/` — no `:8000` needed.
+**Update any existing links/redirects that pointed at `:8000`** (e.g. a
+domain-forwarding page) to drop the port now that nginx serves plain
+port 80.
+
+## 4. Updating after a code change
 
 ```bash
 cd /opt/wordbridge
@@ -105,11 +140,19 @@ sudo -u wordbridge .venv/bin/pip install -r requirements.txt
 sudo systemctl restart wordbridge
 ```
 
-## 4. Optional: a real domain + HTTPS
+If `deploy/wordbridge.service` or `deploy/nginx-wordbridge.conf`
+changed, re-copy them and reload the relevant service too — `git pull`
+alone doesn't touch anything outside the repo:
 
-The steps above serve plain HTTP directly from gunicorn on port 8000 —
-fine to start with. To put it behind a domain with a free TLS cert
-later, add nginx as a reverse proxy (`sudo apt install nginx`, proxy
-`/` to `127.0.0.1:8000`, then `certbot --nginx`) and change the service
-file's bind address to `127.0.0.1:8000` so gunicorn isn't directly
-exposed. Not required to get running.
+```bash
+sudo cp deploy/wordbridge.service /etc/systemd/system/wordbridge.service
+sudo systemctl daemon-reload
+sudo cp deploy/nginx-wordbridge.conf /etc/nginx/sites-available/wordbridge
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+## 5. Optional: HTTPS with a real domain
+
+Once nginx is in front and a domain points at the VPS, add a free TLS
+cert with `sudo apt install certbot python3-certbot-nginx && sudo
+certbot --nginx`. Not required to get running.
