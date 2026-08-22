@@ -8,7 +8,7 @@ os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
 
 print("Loading word2vec-google-news-300 into memory (this can take 30-60s)...")
 vector_model = load_google_news_model()
-print("Model loaded.")
+print(f"Model loaded. Vocabulary size: {vector_model.vocab_size()} words.")
 
 app = create_app(
     vector_model=vector_model,

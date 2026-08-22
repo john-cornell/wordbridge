@@ -36,6 +36,9 @@ class WordVectorModel:
         self._filtered_vocab = filtered_words
         self._filtered_vocab_set = set(filtered_words)
 
+    def vocab_size(self):
+        return len(self._filtered_vocab)
+
     def contains(self, word):
         return word in self._kv
 
@@ -127,5 +130,16 @@ class WordVectorModel:
 def load_google_news_model(vocab_limit=200000):
     import gensim.downloader as api
 
-    keyed_vectors = api.load("word2vec-google-news-300")
+    # Load with a hard cap instead of api.load()'s default (which parses
+    # and materializes the FULL ~3-million-word file, only for nearly all
+    # of it to become garbage the instant WordVectorModel builds its own
+    # smaller copy). Freeing millions of individual Python objects (dict
+    # entries, strings) is real, unpredictable work - confirmed hanging a
+    # production gunicorn worker for minutes on every single boot, well
+    # past its own request-serving timeout. A generous multiple of
+    # vocab_limit comfortably covers what _TOKEN_RE filters out (phrases,
+    # capitalized entries) while never holding more than a fraction of the
+    # full vocabulary in memory at once.
+    path = api.load("word2vec-google-news-300", return_path=True)
+    keyed_vectors = KeyedVectors.load_word2vec_format(path, binary=True, limit=vocab_limit * 3)
     return WordVectorModel(keyed_vectors, vocab_limit=vocab_limit)

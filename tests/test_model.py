@@ -26,6 +26,10 @@ def test_filtered_vocab_excludes_multi_word_and_capitalized(tiny_model):
     assert "cat" in tiny_model._filtered_vocab
 
 
+def test_vocab_size_matches_filtered_word_count(tiny_model):
+    assert tiny_model.vocab_size() == len(tiny_model._filtered_vocab) == 4
+
+
 def test_random_pair_returns_two_distinct_filtered_words(tiny_model):
     word_a, word_b = tiny_model.random_pair(rng=random.Random(42))
     assert word_a != word_b
