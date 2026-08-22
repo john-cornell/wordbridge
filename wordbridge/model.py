@@ -136,10 +136,15 @@ def load_google_news_model(vocab_limit=200000):
     # smaller copy). Freeing millions of individual Python objects (dict
     # entries, strings) is real, unpredictable work - confirmed hanging a
     # production gunicorn worker for minutes on every single boot, well
-    # past its own request-serving timeout. A generous multiple of
-    # vocab_limit comfortably covers what _TOKEN_RE filters out (phrases,
-    # capitalized entries) while never holding more than a fraction of the
-    # full vocabulary in memory at once.
+    # past its own request-serving timeout.
+    #
+    # The multiplier covers what _TOKEN_RE filters out (phrases, capitalized
+    # entries). Measured in production: a 3x buffer only yielded ~13.6% of
+    # raw entries as valid (81,705 words from 600,000 raw), well short of
+    # vocab_limit - not the ~33% originally guessed. 8.5x is sized off that
+    # real number (200,000 / 0.136 ≈ 1.47M, +~15% margin) rather than
+    # another guess. Re-tune from the actual logged vocab_size if it's
+    # still short, or vocab_limit changes.
     path = api.load("word2vec-google-news-300", return_path=True)
-    keyed_vectors = KeyedVectors.load_word2vec_format(path, binary=True, limit=vocab_limit * 3)
+    keyed_vectors = KeyedVectors.load_word2vec_format(path, binary=True, limit=int(vocab_limit * 8.5))
     return WordVectorModel(keyed_vectors, vocab_limit=vocab_limit)
