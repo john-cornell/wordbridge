@@ -88,6 +88,27 @@ async function getJSON(url) {
   return data;
 }
 
+const playerNameInput = document.getElementById("player-name-input");
+
+async function loadPlayerName() {
+  try {
+    const data = await getJSON("/api/player_name");
+    playerNameInput.value = data.name || "";
+  } catch (err) {
+    // Non-fatal — just leave the field blank if this fails.
+  }
+}
+
+playerNameInput.addEventListener("change", async () => {
+  try {
+    await postJSON("/api/player_name", { name: playerNameInput.value.trim() });
+  } catch (err) {
+    statusEl.textContent = err.message;
+  }
+});
+
+loadPlayerName();
+
 function formatScoreLine(data) {
   if (typeof data.par_length === "number") {
     return `Score: ${data.score} (par ${data.par_length} · you: ${data.words_used} word${data.words_used === 1 ? "" : "s"})`;

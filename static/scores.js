@@ -15,6 +15,10 @@ async function loadHighScores() {
   for (const entry of data.scores) {
     const row = document.createElement("tr");
 
+    const player = document.createElement("td");
+    player.textContent = entry.player_name || "Anonymous";
+    row.appendChild(player);
+
     const source = document.createElement("td");
     source.textContent = entry.start_word;
     row.appendChild(source);

@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from flask import Flask
 
 
@@ -6,6 +8,10 @@ def create_app(vector_model=None, db_path=":memory:", secret_key="dev-secret-key
     app.config["VECTOR_MODEL"] = vector_model
     app.config["DB_PATH"] = db_path
     app.secret_key = secret_key
+    # A remembered player name should survive far longer than a single game
+    # session (Flask's default is 31 days) — this is the cookie lifetime
+    # used once a name is set via session.permanent = True.
+    app.permanent_session_lifetime = timedelta(days=365)
 
     from .routes import bp as routes_bp
 
