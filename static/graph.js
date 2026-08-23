@@ -1,5 +1,8 @@
 const SVG_NS = "http://www.w3.org/2000/svg";
-const NODE_RADIUS = 28;
+const NODE_HEIGHT = 40;
+const NODE_MIN_WIDTH = 46;
+const NODE_HORIZONTAL_PADDING = 10;
+const NODE_FONT_SIZE = 16;
 const PADDING = 50;
 const MIN_EDGE_WIDTH = 1;
 const MAX_EDGE_WIDTH = 6;
@@ -49,8 +52,12 @@ class ChainGraph {
     this.dragNode = null;
     this._hideTooltip();
 
-    const startNode = this._makeNode(startWord, PADDING, this.height / 2, true);
-    const targetNode = this._makeNode(targetWord, this.width - PADDING, this.height / 2, true);
+    const startWidth = this._measureNodeWidth(startWord);
+    const targetWidth = this._measureNodeWidth(targetWord);
+    const startX = Math.max(PADDING, startWidth / 2 + PADDING / 2);
+    const targetX = Math.min(this.width - PADDING, this.width - targetWidth / 2 - PADDING / 2);
+    const startNode = this._makeNode(startWord, startX, this.height / 2, true);
+    const targetNode = this._makeNode(targetWord, targetX, this.height / 2, true);
     this.nodes = [startNode, targetNode];
     this.edges = [];
 
@@ -66,19 +73,31 @@ class ChainGraph {
   }
 
   addStep(step) {
-    const anchor = this.nodes[this.nodes.length - 1];
-    const rawX = anchor.x + (Math.random() - 0.5) * 60;
-    const rawY = anchor.y + (Math.random() - 0.5) * 60;
-    const x = Math.max(NODE_RADIUS, Math.min(this.width - NODE_RADIUS, rawX));
-    const y = Math.max(NODE_RADIUS, Math.min(this.height - NODE_RADIUS, rawY));
+    // Reuse an existing node instead of rendering duplicate words.
+    const existingIds = this._nodesByWord.get(step.word);
+    let node;
+    if (existingIds && existingIds.length) {
+      node = this._nodeById(existingIds[existingIds.length - 1]);
+      node.neighborSimilarity = step.neighbor_similarity;
+      node.targetSimilarity = step.target_similarity;
+      node.isDigression = step.is_digression;
+      this._updateNodeAppearance(node);
+    } else {
+      const anchor = this.nodes[this.nodes.length - 1];
+      const rawX = anchor.x + (Math.random() - 0.5) * 60;
+      const rawY = anchor.y + (Math.random() - 0.5) * 60;
+      const halfWidth = this._measureNodeWidth(step.word) / 2;
+      const x = Math.max(halfWidth, Math.min(this.width - halfWidth, rawX));
+      const y = Math.max(NODE_HEIGHT / 2, Math.min(this.height - NODE_HEIGHT / 2, rawY));
 
-    const node = this._makeNode(step.word, x, y, false);
-    node.neighborSimilarity = step.neighbor_similarity;
-    node.targetSimilarity = step.target_similarity;
-    node.isDigression = step.is_digression;
+      node = this._makeNode(step.word, x, y, false);
+      node.neighborSimilarity = step.neighbor_similarity;
+      node.targetSimilarity = step.target_similarity;
+      node.isDigression = step.is_digression;
 
-    this.nodes.push(node);
-    this._createNodeEl(node);
+      this.nodes.push(node);
+      this._createNodeEl(node);
+    }
 
     const used = new Map();
     for (const entry of step.similarities || []) {
@@ -132,8 +151,9 @@ class ChainGraph {
     const anchor = this.nodes[this.nodes.length - 1];
     const rawX = anchor ? anchor.x + (Math.random() - 0.5) * 60 : this.width / 2;
     const rawY = anchor ? anchor.y + (Math.random() - 0.5) * 60 : this.height / 2;
-    const x = Math.max(NODE_RADIUS, Math.min(this.width - NODE_RADIUS, rawX));
-    const y = Math.max(NODE_RADIUS, Math.min(this.height - NODE_RADIUS, rawY));
+    const halfWidth = this._measureNodeWidth(word) / 2;
+    const x = Math.max(halfWidth, Math.min(this.width - halfWidth, rawX));
+    const y = Math.max(NODE_HEIGHT / 2, Math.min(this.height - NODE_HEIGHT / 2, rawY));
 
     const node = this._makeNode(word, x, y, false);
     node.isSuggested = true;
@@ -158,6 +178,7 @@ class ChainGraph {
     return {
       id: this._nextId++,
       word,
+      width: this._measureNodeWidth(word),
       x,
       y,
       vx: 0,
@@ -170,11 +191,13 @@ class ChainGraph {
     };
   }
 
-  _fontSizeForWord(word) {
-    const maxWidth = NODE_RADIUS * 2 - 8;
-    const estimatedCharWidth = 0.6;
-    const fitted = maxWidth / (word.length * estimatedCharWidth);
-    return Math.max(8, Math.min(14, fitted));
+  _measureNodeWidth(word) {
+    if (!this._measureCtx) {
+      this._measureCtx = document.createElement("canvas").getContext("2d");
+      this._measureCtx.font = `${NODE_FONT_SIZE}px sans-serif`;
+    }
+    const textWidth = this._measureCtx.measureText(word).width;
+    return Math.max(NODE_MIN_WIDTH, textWidth + NODE_HORIZONTAL_PADDING * 2);
   }
 
   _nodeById(id) {
@@ -187,15 +210,19 @@ class ChainGraph {
     g.dataset.nodeId = String(node.id);
     g.setAttribute("transform", `translate(${node.x}, ${node.y})`);
 
-    const circle = document.createElementNS(SVG_NS, "circle");
-    circle.setAttribute("r", NODE_RADIUS);
-    g.appendChild(circle);
+    const rect = document.createElementNS(SVG_NS, "rect");
+    rect.setAttribute("x", -node.width / 2);
+    rect.setAttribute("y", -NODE_HEIGHT / 2);
+    rect.setAttribute("width", node.width);
+    rect.setAttribute("height", NODE_HEIGHT);
+    rect.setAttribute("rx", NODE_HEIGHT / 2);
+    g.appendChild(rect);
 
     const text = document.createElementNS(SVG_NS, "text");
     text.textContent = node.word;
     text.setAttribute("text-anchor", "middle");
     text.setAttribute("dy", "0.35em");
-    text.style.fontSize = `${this._fontSizeForWord(node.word)}px`;
+    text.style.fontSize = `${NODE_FONT_SIZE}px`;
     g.appendChild(text);
 
     g.addEventListener("mouseenter", (evt) => this._showTooltip(node, evt));
@@ -203,7 +230,7 @@ class ChainGraph {
     g.addEventListener("mouseleave", () => this._hideTooltip());
 
     this.svg.appendChild(g);
-    this.nodeEls.set(node.id, { g, circle, text });
+    this.nodeEls.set(node.id, { g, rect, text });
 
     if (!this._nodesByWord.has(node.word)) {
       this._nodesByWord.set(node.word, []);
@@ -216,9 +243,9 @@ class ChainGraph {
   _updateNodeAppearance(node) {
     const els = this.nodeEls.get(node.id);
     if (!els) return;
-    els.circle.classList.toggle("node-pinned", node.pinned);
-    els.circle.classList.toggle("node-digression", node.isDigression);
-    els.circle.classList.toggle("node-suggested", node.isSuggested);
+    els.rect.classList.toggle("node-pinned", node.pinned);
+    els.rect.classList.toggle("node-digression", node.isDigression);
+    els.rect.classList.toggle("node-suggested", node.isSuggested);
   }
 
   _createEdgeEl(edge) {
@@ -352,8 +379,9 @@ class ChainGraph {
       node.vy = (node.vy + fy) * DAMPING;
       node.x += node.vx;
       node.y += node.vy;
-      node.x = Math.max(NODE_RADIUS, Math.min(this.width - NODE_RADIUS, node.x));
-      node.y = Math.max(NODE_RADIUS, Math.min(this.height - NODE_RADIUS, node.y));
+      const halfWidth = node.width / 2;
+      node.x = Math.max(halfWidth, Math.min(this.width - halfWidth, node.x));
+      node.y = Math.max(NODE_HEIGHT / 2, Math.min(this.height - NODE_HEIGHT / 2, node.y));
     }
   }
 
@@ -385,8 +413,9 @@ class ChainGraph {
   _onMouseMove(evt) {
     if (!this.dragNode) return;
     const pt = this._svgPoint(evt);
-    this.dragNode.x = Math.max(NODE_RADIUS, Math.min(this.width - NODE_RADIUS, pt.x));
-    this.dragNode.y = Math.max(NODE_RADIUS, Math.min(this.height - NODE_RADIUS, pt.y));
+    const halfWidth = this.dragNode.width / 2;
+    this.dragNode.x = Math.max(halfWidth, Math.min(this.width - halfWidth, pt.x));
+    this.dragNode.y = Math.max(NODE_HEIGHT / 2, Math.min(this.height - NODE_HEIGHT / 2, pt.y));
     this.dragNode.vx = 0;
     this.dragNode.vy = 0;
   }

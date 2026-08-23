@@ -31,6 +31,39 @@ def test_new_game_manual_mode_accepts_known_words(client):
     }
 
 
+def test_new_game_manual_mode_rejects_identical_words(client):
+    response = client.post(
+        "/api/game/new",
+        json={"mode": "manual", "word1": "cat", "word2": "cat"},
+    )
+    assert response.status_code == 400
+    assert response.get_json() == {
+        "error": "Start and target words must be different"
+    }
+
+
+def test_new_game_manual_mode_reports_all_failing_validations_at_once(client):
+    response = client.post(
+        "/api/game/new",
+        json={"mode": "manual", "word1": "nonexistent1", "word2": "nonexistent2"},
+    )
+    assert response.status_code == 400
+    assert response.get_json() == {
+        "error": "'nonexistent1' is not a recognized word\n'nonexistent2' is not a recognized word"
+    }
+
+
+def test_new_game_manual_mode_dedupes_identical_invalid_word_repeated_in_both_boxes(client):
+    response = client.post(
+        "/api/game/new",
+        json={"mode": "manual", "word1": "nonexistent", "word2": "nonexistent"},
+    )
+    assert response.status_code == 400
+    assert response.get_json() == {
+        "error": "'nonexistent' is not a recognized word\nStart and target words must be different"
+    }
+
+
 def test_new_game_manual_mode_returns_start_target_similarity(client):
     response = client.post(
         "/api/game/new",
@@ -211,25 +244,21 @@ def test_add_word_response_includes_similarities_to_other_chain_words(client):
     assert data["winning_connection"] is None
 
 
-def test_long_chain_does_not_overflow_session_cookie(client):
-    client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
+def test_long_chain_does_not_overflow_session_cookie(big_vocab_client, big_vocab_model):
+    big_vocab_client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
 
-    # "car" is deliberately excluded here: it's highly similar to "auto" in
-    # the tiny fixture model and would trigger an early win, short-circuiting
-    # the chain before it reaches the length this test needs.
+    # Words can no longer be replayed, so this test uses a fixture with 200+
+    # mutually-orthogonal filler words (similarity 0.0 to everything) instead
+    # of cycling a couple of words — that also guarantees no accidental win.
     #
     # The real-world bug report measured overflow at ~19 words against the
-    # full word2vec vocabulary (longer words, more float precision per
-    # entry). This fixture's vocabulary is tiny (3-4 letter words, only two
-    # distinct words cycled), so the same O(n^2) payload is much smaller per
-    # step and doesn't cross 4093 bytes until roughly 170+ steps. 200 steps
-    # is used here instead of ~20 so this test is a genuine regression
-    # guard: verified to fail (cookie > 4093 bytes) against the unfixed
-    # code, and pass comfortably against the fix.
-    words = ["dog", "cat"]
+    # full word2vec vocabulary. 200 steps is used here as a comfortable
+    # regression guard: verified to fail (cookie > 4093 bytes) against the
+    # unfixed code, and pass comfortably against the fix.
+    filler_words = [w for w in big_vocab_model._filtered_vocab if w not in ("cat", "auto")]
     response = None
     for i in range(200):
-        response = client.post("/api/game/word", json={"word": words[i % len(words)]})
+        response = big_vocab_client.post("/api/game/word", json={"word": filler_words[i]})
         assert response.status_code == 200
 
     set_cookie = response.headers.get("Set-Cookie", "")
@@ -239,7 +268,7 @@ def test_long_chain_does_not_overflow_session_cookie(client):
         # Flask doesn't necessarily resend Set-Cookie on every response, so
         # fall back to checking the size of the persisted session cookie
         # directly via the test client's cookie jar.
-        session_cookie = client.get_cookie("session")
+        session_cookie = big_vocab_client.get_cookie("session")
         assert session_cookie is not None
         assert len(session_cookie.value) < 4093
 

@@ -49,7 +49,7 @@ def _get_db_conn():
 
 
 def _already_used_words(chain):
-    return {chain.start_word} | {step.word for step in chain.steps}
+    return {chain.start_word, chain.target_word} | {step.word for step in chain.steps}
 
 
 def _new_deadline():
@@ -186,6 +186,8 @@ def new_game():
             return jsonify(error=f"'{word1}' is not a recognized word"), 400
         if not model.contains(word2):
             return jsonify(error=f"'{word2}' is not a recognized word"), 400
+        if word1 == word2:
+            return jsonify(error="Start and target words must be different"), 400
         start_word, target_word = word1, word2
         solution_route = _compute_solution_route(model, start_word, target_word, threshold, _new_deadline())
     else:

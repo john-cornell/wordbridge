@@ -5,6 +5,7 @@ const targetWordEl = document.getElementById("target-word");
 const scoreEl = document.getElementById("score");
 const parInfoEl = document.getElementById("par-info");
 const statusEl = document.getElementById("status");
+const setupStatusEl = document.getElementById("setup-status");
 
 const chainGraph = new ChainGraph(
   document.getElementById("chain-graph"),
@@ -152,6 +153,7 @@ function showGame(startWord, targetWord, startTargetSimilarity, threshold, parLe
   scoreEl.textContent = "";
   parInfoEl.textContent = typeof parLength === "number" ? `Shortest path found: ${parLength} word${parLength === 1 ? "" : "s"}` : "";
   statusEl.textContent = "";
+  setupStatusEl.textContent = "";
   document.getElementById("word-input").disabled = false;
   document.getElementById("add-word-btn").disabled = false;
   document.getElementById("hint-btn").disabled = false;
@@ -169,34 +171,54 @@ function showGame(startWord, targetWord, startTargetSimilarity, threshold, parLe
 }
 
 document.getElementById("random-btn").addEventListener("click", async () => {
+  setupStatusEl.textContent = "";
   try {
     const data = await postJSON("/api/game/new", { mode: "random" });
     showGame(data.start_word, data.target_word, data.start_target_similarity, data.threshold, data.par_length);
   } catch (err) {
-    statusEl.textContent = err.message;
+    setupStatusEl.textContent = err.message;
   }
 });
 
 document.getElementById("manual-btn").addEventListener("click", async () => {
+  setupStatusEl.textContent = "";
   const word1 = document.getElementById("word1-input").value.trim();
   const word2 = document.getElementById("word2-input").value.trim();
   try {
     const data = await postJSON("/api/game/new", { mode: "manual", word1, word2 });
     showGame(data.start_word, data.target_word, data.start_target_similarity, data.threshold, data.par_length);
   } catch (err) {
-    statusEl.textContent = err.message;
+    setupStatusEl.textContent = err.message;
   }
 });
 
+let addWordInFlight = false;
+
 async function addWord() {
+  // Prevent duplicate submissions while an add-word request is in progress.
+  if (addWordInFlight) return;
+
   const input = document.getElementById("word-input");
+  const btn = document.getElementById("add-word-btn");
   const word = input.value.trim();
+  input.value = "";
+
+  addWordInFlight = true;
+  input.disabled = true;
+  btn.disabled = true;
   try {
     const data = await postJSON("/api/game/word", { word });
-    input.value = "";
     applyMoveResult(data);
+    if (!data.won) {
+      input.disabled = false;
+      btn.disabled = false;
+    }
   } catch (err) {
     statusEl.textContent = err.message;
+    input.disabled = false;
+    btn.disabled = false;
+  } finally {
+    addWordInFlight = false;
   }
 }
 
@@ -288,6 +310,7 @@ document.getElementById("restart-btn").addEventListener("click", async () => {
 document.getElementById("new-game-btn").addEventListener("click", () => {
   document.getElementById("word1-input").value = "";
   document.getElementById("word2-input").value = "";
+  setupStatusEl.textContent = "";
   setupSection.hidden = false;
   gameSection.hidden = true;
 });
