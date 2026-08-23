@@ -67,26 +67,35 @@ function setDifficultyButtonsDisabled(disabled) {
   }
 }
 
-async function postJSON(url, body) {
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body || {}),
-  });
-  const data = await response.json();
+async function parseJSONResponse(response) {
+  let data;
+  try {
+    data = await response.json();
+  } catch {
+    // The server (or a proxy in front of it) returned something that
+    // isn't JSON - e.g. nginx's own HTML error page during a brief
+    // upstream restart. Surface a readable message instead of the raw
+    // parse error.
+    throw new Error(`Server error (${response.status}). Please try again.`);
+  }
   if (!response.ok) {
     throw new Error(data.error || "Request failed");
   }
   return data;
 }
 
+async function postJSON(url, body) {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body || {}),
+  });
+  return parseJSONResponse(response);
+}
+
 async function getJSON(url) {
   const response = await fetch(url);
-  const data = await response.json();
-  if (!response.ok) {
-    throw new Error(data.error || "Request failed");
-  }
-  return data;
+  return parseJSONResponse(response);
 }
 
 const playerNameInput = document.getElementById("player-name-input");
