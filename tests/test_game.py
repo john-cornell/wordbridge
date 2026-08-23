@@ -96,15 +96,15 @@ def test_score_penalizes_length_and_digressions(tiny_model):
 
 def test_score_is_100_when_actual_words_match_par(tiny_model):
     chain = Chain(tiny_model, start_word="cat", target_word="auto", threshold=0.99, par_length=2)
+    chain.add_word("dog")
     chain.add_word("car")
-    chain.add_word("auto")
     assert chain.score() == 100
 
 
 def test_score_drops_relative_to_par_as_extra_words_are_used(tiny_model):
     chain = Chain(tiny_model, start_word="cat", target_word="auto", threshold=0.99, par_length=1)
-    chain.add_word("car")
-    chain.add_word("auto")  # 2 words used against a par of 1 -> 100*1/2
+    chain.add_word("dog")
+    chain.add_word("car")  # 2 words used against a par of 1 -> 100*1/2
     assert chain.score() == 50
 
 
@@ -244,13 +244,35 @@ def test_best_step_returns_none_when_no_steps(tiny_model):
 
 def test_best_step_returns_step_with_highest_target_similarity(tiny_model):
     chain = Chain(tiny_model, start_word="cat", target_word="auto", threshold=0.99)
-    chain.add_word("dog")  # target_similarity ~0.11 vs auto
-    chain.add_word("cat")  # target_similarity 0.0 vs auto - lower, must not win out
+    chain.add_word("car")  # target_similarity ~0.99 vs auto
+    chain.add_word("dog")  # target_similarity ~0.11 vs auto - lower, must not win out
     best = chain.best_step()
-    assert best.word == "dog"
+    assert best.word == "car"
     assert best.target_similarity == pytest.approx(
-        tiny_model.similarity("dog", "auto")
+        tiny_model.similarity("car", "auto")
     )
+
+
+def test_add_word_rejects_word_already_played_as_a_step(tiny_model):
+    chain = Chain(tiny_model, start_word="cat", target_word="auto")
+    chain.add_word("dog")
+    with pytest.raises(ValueError):
+        chain.add_word("dog")
+
+
+def test_add_word_rejects_start_word(tiny_model):
+    chain = Chain(tiny_model, start_word="cat", target_word="auto")
+    with pytest.raises(ValueError):
+        chain.add_word("cat")
+
+
+def test_add_word_rejects_target_word(tiny_model):
+    # The target word is already "played" by definition — it's the
+    # destination, not a move you can make, so it's rejected outright,
+    # even on the very first attempt, just like the start word.
+    chain = Chain(tiny_model, start_word="cat", target_word="auto")
+    with pytest.raises(ValueError):
+        chain.add_word("auto")
 
 
 def test_next_hint_cost_starts_at_five_and_doubles(tiny_model):

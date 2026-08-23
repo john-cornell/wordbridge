@@ -30,6 +30,15 @@ class Chain:
         if not self._model.contains(word):
             raise ValueError(f"'{word}' is not a recognized word")
 
+        if word == self.start_word:
+            raise ValueError(f"'{word}' is already the start word")
+
+        if word == self.target_word:
+            raise ValueError(f"'{word}' is already the target word")
+
+        if any(step.word == word for step in self.steps):
+            raise ValueError(f"'{word}' has already been played")
+
         previous_word = self.steps[-1].word if self.steps else self.start_word
         previous_target_similarity = (
             self.steps[-1].target_similarity

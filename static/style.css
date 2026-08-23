@@ -273,25 +273,31 @@ h1 {
   margin: 0;
 }
 
-.node circle {
+#setup-status {
+  color: var(--danger);
+  margin: 0.5rem 0 0;
+  white-space: pre-line;
+}
+
+.node rect {
   fill: #4a90d9;
   stroke: #2c5f8a;
   stroke-width: 1.5;
   cursor: grab;
 }
 
-.node circle.node-pinned {
+.node rect.node-pinned {
   fill: #2b2f3a;
   stroke: #14161c;
   cursor: default;
 }
 
-.node circle.node-digression {
+.node rect.node-digression {
   fill: #e08a2b;
   stroke: #a05e10;
 }
 
-.node circle.node-suggested {
+.node rect.node-suggested {
   fill: #9ca3af;
   stroke: #6b7280;
   stroke-dasharray: 3, 2;

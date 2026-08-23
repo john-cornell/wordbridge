@@ -1,3 +1,6 @@
+import itertools
+import string
+
 import numpy as np
 import pytest
 from gensim.models import KeyedVectors
@@ -30,3 +33,31 @@ def tiny_model():
     ])
     kv.add_vectors(words, vectors)
     return WordVectorModel(kv, vocab_limit=10)
+
+
+@pytest.fixture
+def big_vocab_model():
+    # Mutually-orthogonal one-hot vectors: every pair of distinct words has
+    # similarity 0.0, so none of them can accidentally win or repeat-trigger
+    # a digression. Gives enough genuinely distinct words to build a long
+    # chain without ever needing to replay one.
+    filler_words = [
+        "".join(letters)
+        for letters in itertools.islice(itertools.product(string.ascii_lowercase, repeat=3), 205)
+    ]
+    words = ["cat", "auto"] + filler_words
+    vectors = np.eye(len(words))
+
+    kv = KeyedVectors(vector_size=len(words))
+    kv.add_vectors(words, vectors)
+    return WordVectorModel(kv, vocab_limit=len(words))
+
+
+@pytest.fixture
+def big_vocab_app(big_vocab_model):
+    return create_app(vector_model=big_vocab_model, db_path=":memory:", secret_key="test-secret")
+
+
+@pytest.fixture
+def big_vocab_client(big_vocab_app):
+    return big_vocab_app.test_client()
