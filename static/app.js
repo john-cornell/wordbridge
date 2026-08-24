@@ -25,13 +25,20 @@ function applyThreshold(value) {
   }
 }
 
+function formatParInfo(parLength) {
+  if (typeof parLength === "number") {
+    return `Shortest path I found: ${parLength} word${parLength === 1 ? "" : "s"} (maybe you can do better!)`;
+  }
+  // par_length is null when the solver couldn't find any route at this
+  // threshold within its search limits - that's a limit of the search,
+  // not proof no connection exists.
+  return "I couldn't find a path, but that doesn't mean there isn't one. Can you do better than me?";
+}
+
 async function persistThreshold(value) {
   try {
     const data = await postJSON("/api/game/threshold", { threshold: Number(value) });
-    parInfoEl.textContent =
-      typeof data.par_length === "number"
-        ? `Shortest path I found: ${data.par_length} word${data.par_length === 1 ? "" : "s"} (maybe you can do better!)`
-        : "";
+    parInfoEl.textContent = formatParInfo(data.par_length);
   } catch (err) {
     statusEl.textContent = err.message;
   }
@@ -160,8 +167,7 @@ function showGame(startWord, targetWord, startTargetSimilarity, threshold, parLe
   targetWordEl.textContent = targetWord;
   chainGraph.reset(startWord, targetWord, startTargetSimilarity);
   scoreEl.textContent = "";
-  parInfoEl.textContent =
-    typeof parLength === "number" ? `Shortest path I found: ${parLength} word${parLength === 1 ? "" : "s"} (maybe you can do better!)` : "";
+  parInfoEl.textContent = formatParInfo(parLength);
   statusEl.textContent = "";
   setupStatusEl.textContent = "";
   document.getElementById("word-input").disabled = false;
