@@ -404,16 +404,17 @@ h1 {
   margin: 1rem 0;
 }
 
+.table-instructions {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin: 0 0 0.75rem;
+}
+
 .controls-row-label {
   font-size: 0.85rem;
   color: var(--text-muted);
   font-weight: 600;
   align-self: center;
-}
-
-.col-actions {
-  text-align: right;
-  white-space: nowrap;
 }
 
 .modal-overlay {

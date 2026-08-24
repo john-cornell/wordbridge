@@ -79,7 +79,20 @@ function renderScoresTable() {
     row.appendChild(source);
 
     const destination = document.createElement("td");
-    destination.textContent = entry.target_word;
+    if (entry.has_solution) {
+      const link = document.createElement("a");
+      link.href = "#";
+      link.className = "nav-link";
+      link.textContent = entry.target_word;
+      link.addEventListener("click", (evt) => {
+        evt.preventDefault();
+        openSolution(entry);
+      });
+      destination.appendChild(link);
+    } else {
+      destination.textContent = entry.target_word;
+      destination.title = "No solution recorded for this attempt";
+    }
     row.appendChild(destination);
 
     const score = document.createElement("td");
@@ -93,21 +106,6 @@ function renderScoresTable() {
     const date = document.createElement("td");
     date.textContent = formatDate(entry.created_at);
     row.appendChild(date);
-
-    const actions = document.createElement("td");
-    actions.classList.add("col-actions");
-    const solutionBtn = document.createElement("button");
-    solutionBtn.type = "button";
-    solutionBtn.className = "btn btn-outline";
-    solutionBtn.textContent = "Solution";
-    if (!entry.has_solution) {
-      solutionBtn.disabled = true;
-      solutionBtn.title = "No solution recorded for this attempt";
-    } else {
-      solutionBtn.addEventListener("click", () => openSolution(entry));
-    }
-    actions.appendChild(solutionBtn);
-    row.appendChild(actions);
 
     tbody.appendChild(row);
   }
