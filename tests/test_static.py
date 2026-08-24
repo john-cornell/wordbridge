@@ -26,6 +26,19 @@ def test_index_page_includes_hint_button(client):
     assert b'id="hint-btn"' in response.data
 
 
+def test_index_page_pins_fireworks_cdn_script_with_integrity(client):
+    # Must stay pinned to an exact version with a matching integrity hash -
+    # never a floating range like "@2.x", and never without integrity/
+    # crossorigin, since this is the app's only external runtime script.
+    response = client.get("/")
+    assert response.status_code == 200
+    assert b"fireworks-js@2." in response.data
+    assert b"fireworks-js@2.x" not in response.data
+    assert b'integrity="sha384-' in response.data
+    assert b'crossorigin="anonymous"' in response.data
+    assert b'id="fireworks-overlay"' in response.data
+
+
 def test_index_page_includes_difficulty_buttons(client):
     response = client.get("/")
     assert response.status_code == 200

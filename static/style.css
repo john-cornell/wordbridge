@@ -471,3 +471,10 @@ h1 {
   color: var(--text-muted);
   margin: 0.5rem 0 0;
 }
+
+#fireworks-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1000;
+}

@@ -6,6 +6,54 @@ const scoreEl = document.getElementById("score");
 const parInfoEl = document.getElementById("par-info");
 const statusEl = document.getElementById("status");
 const setupStatusEl = document.getElementById("setup-status");
+const fireworksOverlay = document.getElementById("fireworks-overlay");
+
+// Loaded from a CDN (see index.html) - if that request fails or is blocked
+// (firewall, ad-blocker, CDN outage), `Fireworks` is undefined. Guard it
+// so a purely cosmetic feature can never take down the rest of the game;
+// without this check, the ReferenceError below would abort this entire
+// script before any of the actual game wiring further down ever runs.
+const fireworks =
+  typeof Fireworks !== "undefined"
+    ? new Fireworks.default(fireworksOverlay, {
+        autoresize: true,
+        opacity: 0.5,
+        acceleration: 1.05,
+        friction: 0.97,
+        gravity: 1.5,
+        particles: 40,
+        traceLength: 3,
+        traceSpeed: 10,
+        explosion: 5,
+        intensity: 20,
+        flickering: 50,
+      })
+    : null;
+
+let fireworksTimeout;
+
+function showFireworks() {
+  if (!fireworks) return;
+  clearTimeout(fireworksTimeout);
+
+  fireworks.start();
+
+  fireworksTimeout = setTimeout(() => {
+    // waitStop (not stop) lets already-launched fireworks finish their
+    // own animation and fade out naturally, instead of cutting them off
+    // mid-flight.
+    fireworks.waitStop(true);
+  }, 10000);
+}
+
+function stopFireworks() {
+  if (!fireworks) return;
+  clearTimeout(fireworksTimeout);
+  // A plain stop (not waitStop) here is deliberate: the player is actively
+  // leaving this screen for a new game, so cut immediately rather than
+  // waiting on fireworks that are about to be irrelevant anyway.
+  fireworks.stop(true);
+}
 
 const chainGraph = new ChainGraph(
   document.getElementById("chain-graph"),
@@ -147,6 +195,7 @@ function applyMoveResult(data, messagePrefix) {
   setDifficultyButtonsDisabled(true);
 
   if (data.won) {
+    showFireworks();
     chainGraph.highlightWinningConnection(data.winning_connection);
     const path = data.winning_connection
       .map((link) => `${link.a} —${link.similarity.toFixed(2)}→ ${link.b}`)
@@ -331,6 +380,8 @@ document.getElementById("restart-btn").addEventListener("click", async () => {
 });
 
 document.getElementById("new-game-btn").addEventListener("click", () => {
+  stopFireworks();
+
   document.getElementById("word1-input").value = "";
   document.getElementById("word2-input").value = "";
   setupStatusEl.textContent = "";
