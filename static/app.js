@@ -25,8 +25,14 @@ function applyThreshold(value) {
   }
 }
 
-function formatParInfo(parLength) {
+function formatParInfo(parLength, startTargetSimilarity, threshold) {
   if (typeof parLength === "number") {
+    if (parLength === 1 && startTargetSimilarity >= threshold) {
+      // The direct start->target similarity already clears the threshold,
+      // so literally any word the player adds wins instantly - not a real
+      // puzzle at this difficulty.
+      return "These words are already connected at this threshold - any word you add will win instantly. Try a harder setting?";
+    }
     return `Shortest path I found: ${parLength} word${parLength === 1 ? "" : "s"} (maybe you can do better!)`;
   }
   // par_length is null when the solver couldn't find any route at this
@@ -38,7 +44,7 @@ function formatParInfo(parLength) {
 async function persistThreshold(value) {
   try {
     const data = await postJSON("/api/game/threshold", { threshold: Number(value) });
-    parInfoEl.textContent = formatParInfo(data.par_length);
+    parInfoEl.textContent = formatParInfo(data.par_length, data.start_target_similarity, data.threshold);
   } catch (err) {
     statusEl.textContent = err.message;
   }
@@ -167,7 +173,7 @@ function showGame(startWord, targetWord, startTargetSimilarity, threshold, parLe
   targetWordEl.textContent = targetWord;
   chainGraph.reset(startWord, targetWord, startTargetSimilarity);
   scoreEl.textContent = "";
-  parInfoEl.textContent = formatParInfo(parLength);
+  parInfoEl.textContent = formatParInfo(parLength, startTargetSimilarity, threshold);
   statusEl.textContent = "";
   setupStatusEl.textContent = "";
   document.getElementById("word-input").disabled = false;

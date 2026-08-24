@@ -261,7 +261,11 @@ def set_threshold():
     session["chain"] = chain.to_dict()
     set_last_threshold(_get_db_conn(), threshold)
 
-    return jsonify(threshold=chain.threshold, par_length=chain.par_length)
+    return jsonify(
+        threshold=chain.threshold,
+        par_length=chain.par_length,
+        start_target_similarity=chain.start_target_similarity(),
+    )
 
 
 @bp.post("/api/game/word")
