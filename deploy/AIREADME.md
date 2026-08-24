@@ -50,6 +50,27 @@ absorb this — it's event-driven and doesn't block on slow clients the
 way a sync worker does. Don't ever change the systemd unit back to
 `--bind 0.0.0.0:8000` without re-adding equivalent protection.
 
+## Known gotcha: this repo's nginx config vs. certbot's live edits
+
+`certbot --nginx` edits the *live* `/etc/nginx/sites-available/wordbridge`
+file in place (adds the `listen 443 ssl` block, cert paths, the HTTP→HTTPS
+redirect server block) — none of that was ever captured back into this
+repo automatically. On 2026-08-23 a plain `cp` of the repo's (still
+HTTP-only) `deploy/nginx-wordbridge.conf` over the live file during an
+unrelated redeploy silently reverted the site to HTTP-only, and the loss
+wasn't noticed until a user reported it. Fixed by pulling the real
+certbot-generated config (`sudo cat /etc/nginx/sites-available/wordbridge`)
+back into this file so it now matches production exactly, including the
+`# managed by Certbot` blocks — a future `cp` of this file reproduces the
+live TLS state instead of erasing it.
+
+**If you ever edit this file again**: after copying it to the server, run
+`sudo certbot --nginx -d wordbridge.monkeyskin.au` afterward regardless of
+whether TLS looks like it's already there — it's safe (reuses the existing
+cert, doesn't request or renew one, as long as it's still within its
+validity window) and guarantees the `# managed by Certbot` blocks are
+correct for whatever you just changed.
+
 ## Keep this current when
 
 - A new top-level package/module gets imported by `app.py` and isn't under `wordbridge/`.
