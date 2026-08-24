@@ -29,9 +29,10 @@ def test_index_page_includes_hint_button(client):
 def test_index_page_includes_difficulty_buttons(client):
     response = client.get("/")
     assert response.status_code == 200
-    assert b'data-threshold="0.25"' in response.data
-    assert b'data-threshold="0.5"' in response.data
-    assert b'data-threshold="0.7"' in response.data
+    for value in ("0.1", "0.2", "0.3", "0.4", "0.5", "0.6", "0.8"):
+        assert f'data-threshold="{value}"'.encode() in response.data
+    for label in ("Simple", "Easy", "Normal", "Tricky", "Hard", "Very Hard", "Insane"):
+        assert label.encode() in response.data
 
 
 def test_graph_js_served(client):
