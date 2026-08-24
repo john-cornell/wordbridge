@@ -137,46 +137,6 @@ def test_find_route_refuses_a_candidate_that_is_not_an_improvement(tiny_model):
     assert route is None
 
 
-def test_find_route_trace_records_each_hop_with_candidates_and_chosen_word():
-    # Same start/near/far/target fixture as the threshold-hop test above —
-    # deterministic geometry lets us assert exactly what each hop saw.
-    angles_deg = {"start": 0, "near": 18.1949, "far": 60, "target": 90}
-    words = list(angles_deg.keys())
-    vectors = np.array([[np.cos(np.radians(a)), np.sin(np.radians(a))] for a in angles_deg.values()])
-    kv = KeyedVectors(vector_size=2)
-    kv.add_vectors(words, vectors)
-    model = WordVectorModel(kv, vocab_limit=10)
-
-    trace = []
-    route = model.find_route("start", "target", max_hops=6, neighbors_per_hop=2, win_threshold=0.7, trace=trace)
-
-    assert route == ["near", "far", "target"]
-    assert len(trace) == 2
-
-    assert trace[0]["from"] == "start"
-    assert trace[0]["chosen"] == "near"
-    assert {c["word"] for c in trace[0]["candidates"]} == {"near", "far"}
-    near_candidate = next(c for c in trace[0]["candidates"] if c["word"] == "near")
-    far_candidate = next(c for c in trace[0]["candidates"] if c["word"] == "far")
-    assert near_candidate["passed_threshold"] is True
-    assert far_candidate["passed_threshold"] is False
-    assert isinstance(near_candidate["similarity_to_current"], float)
-
-    assert trace[1]["from"] == "near"
-    assert trace[1]["chosen"] == "far"
-    assert {c["word"] for c in trace[1]["candidates"]} == {"far"}
-
-
-def test_find_route_trace_records_a_failed_hop_when_nothing_clears_threshold(tiny_model):
-    trace = []
-    route = tiny_model.find_route("cat", "auto", max_hops=1, neighbors_per_hop=1, win_threshold=2.0, trace=trace)
-
-    assert route is None
-    assert len(trace) == 1
-    assert trace[0]["chosen"] is None
-    assert all(c["passed_threshold"] is False for c in trace[0]["candidates"])
-
-
 def test_load_google_news_model_uses_the_local_cache_directly_when_present(tmp_path, monkeypatch):
     # api.load()'s catalog lookup does an unconditional network fetch on
     # every call, even just to resolve a path - and a single bad response

@@ -4,7 +4,7 @@ from flask import Blueprint, current_app, jsonify, request, session
 
 from .db import (
     clear_attempts,
-    get_attempt_solution,
+    get_attempt_for_replay,
     get_last_threshold,
     init_db,
     list_attempts,
@@ -104,39 +104,21 @@ def _compute_solution_route(model, start_word, target_word, threshold, deadline)
     rather than re-searching from wherever the player currently is — that
     re-searching was what produced disconnected/incomplete give-up routes.
     Tries a generous search first, then an even more expensive one before
-    giving up. Returns (route, trace): route is the full path including
-    start_word (or None); trace is every hop the solver actually considered
-    across both attempts, for the high-scores "show solution" reveal."""
-    trace = []
-    route = model.find_route(
-        start_word, target_word, win_threshold=threshold, deadline=deadline, trace=trace, **_PAR_SEARCH_PARAMS
-    )
+    giving up. Returns the full path including start_word, or None."""
+    route = model.find_route(start_word, target_word, win_threshold=threshold, deadline=deadline, **_PAR_SEARCH_PARAMS)
     if route is None:
         route = model.find_route(
-            start_word, target_word, win_threshold=threshold, deadline=deadline, trace=trace, **_PAR_FALLBACK_SEARCH_PARAMS
+            start_word, target_word, win_threshold=threshold, deadline=deadline, **_PAR_FALLBACK_SEARCH_PARAMS
         )
-    if route is None:
-        # No route means nothing to reveal — including any partial trace
-        # from a search that made real hops but still couldn't connect,
-        # so has_solution stays a single flag covering both fields.
-        return None, None
-    return [start_word] + route, trace
+    return [start_word] + route if route is not None else None
 
 
-def _apply_step_and_check_win(chain, step, conn, model):
+def _apply_step_and_check_win(chain, step, conn):
     winning_connection = chain.winning_connection()
     won = winning_connection is not None
     saved_to_high_scores = False
     if won:
         if not chain.gave_up_before:
-            # solution_trace isn't carried in the session (see Chain.to_dict),
-            # so it's recomputed here, once, only for the winning attempt
-            # actually being saved. chain.solution_route stays whatever was
-            # already computed at puzzle-creation time - only the trace
-            # itself is regenerated.
-            _, chain.solution_trace = _compute_solution_route(
-                model, chain.start_word, chain.target_word, chain.threshold, _new_deadline()
-            )
             save_attempt(conn, chain, player_name=session.get("player_name"))
             saved_to_high_scores = True
         chain.mark_won()
@@ -213,15 +195,14 @@ def new_game():
         if errors:
             return jsonify(error="\n".join(errors)), 400
         start_word, target_word = word1, word2
-        solution_route, solution_trace = _compute_solution_route(model, start_word, target_word, threshold, _new_deadline())
+        solution_route = _compute_solution_route(model, start_word, target_word, threshold, _new_deadline())
     else:
         start_word = target_word = None
         solution_route = None
-        solution_trace = []
         deadline = _new_deadline()
         for _ in range(_PAR_REROLL_ATTEMPTS):
             start_word, target_word = model.random_pair(pool_size=_RANDOM_PAIR_POOL_SIZE)
-            solution_route, solution_trace = _compute_solution_route(model, start_word, target_word, threshold, deadline)
+            solution_route = _compute_solution_route(model, start_word, target_word, threshold, deadline)
             if solution_route is not None or time.monotonic() >= deadline:
                 break
         # If every reroll failed (or the wall-clock budget ran out first —
@@ -238,7 +219,6 @@ def new_game():
         threshold=threshold,
         par_length=par_length,
         solution_route=solution_route,
-        solution_trace=solution_trace,
     )
     session["chain"] = chain.to_dict()
 
@@ -273,9 +253,7 @@ def set_threshold():
         return jsonify(error="threshold must be between 0 and 1"), 400
 
     chain.threshold = threshold
-    chain.solution_route, chain.solution_trace = _compute_solution_route(
-        model, chain.start_word, chain.target_word, threshold, _new_deadline()
-    )
+    chain.solution_route = _compute_solution_route(model, chain.start_word, chain.target_word, threshold, _new_deadline())
     chain.par_length = len(chain.solution_route) - 1 if chain.solution_route is not None else None
     session["chain"] = chain.to_dict()
     set_last_threshold(_get_db_conn(), threshold)
@@ -307,7 +285,7 @@ def add_word():
     # chain.completed is guaranteed False here (an already-completed chain
     # returns 400 above, before add_word is ever called), so this is the
     # first time this chain has met the win condition.
-    result = _apply_step_and_check_win(chain, step, _get_db_conn(), model)
+    result = _apply_step_and_check_win(chain, step, _get_db_conn())
     session["chain"] = chain.to_dict()
 
     return jsonify(**result)
@@ -350,7 +328,7 @@ def hint():
 
     cost = chain.use_hint()
     step = chain.add_word(hint_word)
-    result = _apply_step_and_check_win(chain, step, _get_db_conn(), model)
+    result = _apply_step_and_check_win(chain, step, _get_db_conn())
     session["chain"] = chain.to_dict()
 
     return jsonify(hint_word=hint_word, cost=cost, **result)
@@ -421,8 +399,45 @@ def clear_high_scores():
 
 @bp.get("/api/high_scores/<int:attempt_id>/solution")
 def high_score_solution(attempt_id):
-    result = get_attempt_solution(_get_db_conn(), attempt_id)
-    if result is None:
+    """Replays a past attempt's actual words through a fresh Chain at the
+    threshold it was played at, to recover exactly what the player saw:
+    the winning bridge they made, and every word they tried along the way
+    (including digressions) - not the AI solver's own candidate search."""
+    record = get_attempt_for_replay(_get_db_conn(), attempt_id)
+    if record is None:
         return jsonify(error="No attempt with this id"), 404
-    solution_route, solution_trace = result
-    return jsonify(solution_route=solution_route, solution_trace=solution_trace)
+
+    start_word, target_word, threshold, words = record
+    if threshold is None:
+        # Predates this feature - the win threshold isn't recoverable, so
+        # the game can't be replayed correctly.
+        return jsonify(available=False)
+
+    model = _get_model()
+    chain = Chain(model, start_word=start_word, target_word=target_word, threshold=threshold)
+    try:
+        for word in words:
+            chain.add_word(word)
+    except ValueError:
+        # The vocabulary has changed since this game was played (e.g. a
+        # word that was valid then no longer exists) - nothing reliable to
+        # replay.
+        return jsonify(available=False)
+
+    return jsonify(
+        available=True,
+        start_word=start_word,
+        target_word=target_word,
+        start_target_similarity=chain.start_target_similarity(),
+        steps=[
+            {
+                "word": step.word,
+                "neighbor_similarity": step.neighbor_similarity,
+                "target_similarity": step.target_similarity,
+                "is_digression": step.is_digression,
+                "similarities": step.similarities,
+            }
+            for step in chain.steps
+        ],
+        winning_connection=chain.winning_connection(),
+    )

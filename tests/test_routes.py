@@ -515,25 +515,29 @@ def test_high_scores_includes_has_solution_flag(client):
     assert entry["has_solution"] is True
 
 
-def test_high_score_solution_returns_the_precomputed_route_and_trace(client):
+def test_high_score_solution_replays_every_played_word_and_the_winning_bridge(client):
+    # cat-dog-car-auto only connects at 0.11 once BOTH dog and car are
+    # played, in that order (dog-auto alone isn't close enough) - a real
+    # two-word bridge, not a single lucky word.
     client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
-    client.post("/api/game/threshold", json={"threshold": 0.05})
-    client.post("/api/game/word", json={"word": "dog"})  # wins
+    client.post("/api/game/threshold", json={"threshold": 0.11})
+    client.post("/api/game/word", json={"word": "dog"})
+    client.post("/api/game/word", json={"word": "car"})  # wins
 
     attempt_id = client.get("/api/high_scores").get_json()["scores"][0]["id"]
     response = client.get(f"/api/high_scores/{attempt_id}/solution")
     data = response.get_json()
 
     assert response.status_code == 200
-    assert data["solution_route"] == ["cat", "dog", "auto"]
-    assert data["solution_trace"] == [
-        {
-            "from": "cat",
-            "current_similarity": 0.0,
-            "candidates": data["solution_trace"][0]["candidates"],
-            "chosen": "dog",
-        }
-    ]
+    assert data["available"] is True
+    assert data["start_word"] == "cat"
+    assert data["target_word"] == "auto"
+    # "Full search" - every word actually played, not just the solver's
+    # own idea of a route.
+    assert [step["word"] for step in data["steps"]] == ["dog", "car"]
+    # "Direct path" - only the winning bridge the player actually made.
+    assert [link["a"] for link in data["winning_connection"]] == ["cat", "dog", "car"]
+    assert [link["b"] for link in data["winning_connection"]] == ["dog", "car", "auto"]
 
 
 def test_high_score_solution_returns_404_for_unknown_id(client):
@@ -541,22 +545,28 @@ def test_high_score_solution_returns_404_for_unknown_id(client):
     assert response.status_code == 404
 
 
-def test_high_score_solution_is_null_when_puzzle_had_no_findable_route(client, tiny_model, monkeypatch):
-    # Win condition is decided by the player's own played words (BFS over
-    # threshold-connected known words), independent of whether the solver
-    # could find a route at puzzle-creation time — these can disagree.
-    monkeypatch.setattr(tiny_model, "find_route", lambda *args, **kwargs: None)
+def test_high_score_solution_unavailable_for_attempts_predating_this_feature(app, client):
     client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
     client.post("/api/game/threshold", json={"threshold": 0.05})
-    win_response = client.post("/api/game/word", json={"word": "dog"})
-    assert win_response.get_json()["won"] is True
+    client.post("/api/game/word", json={"word": "dog"})  # wins
+
+    attempt_id = client.get("/api/high_scores").get_json()["scores"][0]["id"]
+
+    # Simulate an attempt saved before the threshold column existed - it's
+    # not otherwise recoverable, so the game can't be replayed correctly.
+    with app.app_context():
+        from wordbridge.routes import _get_db_conn
+
+        conn = _get_db_conn()
+        conn.execute("UPDATE attempts SET threshold = NULL WHERE id = ?", (attempt_id,))
+        conn.commit()
 
     entry = client.get("/api/high_scores").get_json()["scores"][0]
     assert entry["has_solution"] is False
 
-    response = client.get(f"/api/high_scores/{entry['id']}/solution")
+    response = client.get(f"/api/high_scores/{attempt_id}/solution")
     assert response.status_code == 200
-    assert response.get_json() == {"solution_route": None, "solution_trace": None}
+    assert response.get_json() == {"available": False}
 
 
 def test_get_player_name_defaults_to_null(client):

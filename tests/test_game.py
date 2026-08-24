@@ -144,29 +144,6 @@ def test_par_length_round_trips_through_to_dict_and_from_dict(tiny_model):
     assert restored.par_length == 3
 
 
-def test_solution_route_round_trips_but_solution_trace_does_not(tiny_model):
-    # solution_trace can be tens of KB (many hops x many candidates each) -
-    # it must never ride in the session cookie (confirmed in production,
-    # 2026-08-24: this blew past browsers' ~4KB cookie limit and got
-    # sessions silently dropped mid-game). solution_route is small (just a
-    # list of words) and is fine to round-trip.
-    chain = Chain(
-        tiny_model,
-        start_word="cat",
-        target_word="auto",
-        solution_route=["cat", "dog", "auto"],
-        solution_trace=[{"from": "cat", "candidates": [], "chosen": "dog"}],
-    )
-
-    serialized = chain.to_dict()
-    assert "solution_trace" not in serialized
-    assert serialized["solution_route"] == ["cat", "dog", "auto"]
-
-    restored = Chain.from_dict(tiny_model, serialized)
-    assert restored.solution_route == ["cat", "dog", "auto"]
-    assert restored.solution_trace is None
-
-
 def test_is_over_soft_cap(tiny_model):
     chain = Chain(tiny_model, start_word="cat", target_word="auto", soft_cap=1)
     chain.add_word("car")

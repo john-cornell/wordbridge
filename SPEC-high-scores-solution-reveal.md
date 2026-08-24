@@ -1,171 +1,153 @@
 # High Scores: Solution Reveal + Player Filter — Spec
 
+## Revision history
+
+**2026-08-24: corrected after initial misimplementation.** The first version
+of this feature showed the AI solver's own pathfinding (`_compute_solution_route`'s
+best-effort route, plus a full "candidates considered per hop" search trace)
+instead of what the player actually did. That's the wrong data entirely —
+"Direct path" and "Full search" are about the player's game, not the AI's
+internal search. Corrected below; the solver-trace mechanism (`find_route(trace=...)`,
+`Chain.solution_trace`, `solution_route_json`/`solution_trace_json` DB
+columns) was fully reverted, along with a session-cookie-overflow bug it
+caused along the way (see `deploy/AIREADME.md`'s "the session is a
+client-side cookie" gotcha — moot now that this feature no longer stores
+anything trace-shaped, but worth remembering for future session state).
+
 ## Problem
 
 The high scores page (`/scores`) lists past attempts but gives no way to see
-*how* a winning chain was actually connectable, and no way to focus on one
-player's results among everyone else's. Separately, there's no record of
-the solver's actual search process for a puzzle — only the final route,
-and only live in the current session (via the give-up reveal), never
-persisted.
+*how* a winning game actually went, and no way to focus on one player's
+results among everyone else's.
 
 ## Goals
 
 - A "Show solution" reveal per high-score row, on the (already separate)
   `/scores` page, so it never interrupts a game in progress.
-  - (a) The direct path: the shortest real route the model found between
-    start and target at the puzzle's threshold.
-  - (b) The full search: every word the solver actually considered while
-    finding that route, not just the winning hops.
+  - **Direct path**: the actual winning bridge the player made — the
+    connected chain of played words (plus start/target) that satisfied the
+    win condition, exactly as shown in-game via `winning_connection`.
+  - **Full search**: every word the player actually tried during that game,
+    in order, including digressions that weren't part of the final bridge.
 - A dropdown to filter the high scores list down to one player.
 
 ## Non-Goals
 
-- No backfill of solution data for attempts saved before this ships —
-  older rows simply have no reveal available. Not backwards compatible,
+- Nothing about the AI solver's own pathfinding (`_compute_solution_route`)
+  is part of this reveal. That mechanism still exists and is unchanged —
+  it's used for par (the score baseline) and the in-game give-up reveal —
+  but it is not what "show solution" on the high-scores page shows.
+- No backfill for attempts saved before this ships — older rows (no stored
+  `threshold`) simply have no reveal available. Not backwards compatible,
   by design.
-- The trace does not include hints used during actual play, or rerolled
-  random pairs that were discarded before the puzzle was chosen — only the
-  solver's search for the pair that became the actual puzzle.
 - The player filter does not change what counts as "high scores" (still
   top 50 by score, overall) — it only hides rows client-side. A player
   whose best attempt didn't crack the top 50 shows nothing when selected.
 - No change to `vocab_limit` / word count. Measured empirically against
   the real cached model file: the entire word2vec-google-news-300 vocab
   only contains ~155,060 valid lowercase-alpha words no matter how much of
-  the file is loaded (140,284 at the current 1.7M-entry raw load; 155,060
-  even loading all 3,000,000 raw entries). 200k was never reachable from
-  this word list. Decision: leave `vocab_limit` at its current value
-  (140k reachable in practice); revisit only if the model source changes.
+  the file is loaded. 200k was never reachable from this word list.
+  Decision: leave `vocab_limit` at its current value.
 
 ## Requirements
 
 ### Data model
 
-- `attempts` table gains two nullable columns, added via the same
-  idempotent `ALTER TABLE ... ADD COLUMN` + catch-`OperationalError` pattern
-  already used for `player_name` in `db.py`'s `init_db`:
-  - `solution_route_json TEXT` — the direct path, `[start_word, ..., target_word]`.
-  - `solution_trace_json TEXT` — the full search trace (see below).
-- `save_attempt` writes both when the chain has them (`chain.solution_route`,
-  `chain.solution_trace`), `NULL` otherwise.
-- `list_high_scores` additionally returns `has_solution: bool` per row
-  (`solution_route_json IS NOT NULL`) so the frontend can grey out the
-  "Show solution" button without a separate fetch per row.
+- `attempts` gains one nullable column, `threshold REAL`, added via the
+  same idempotent `ALTER TABLE ... ADD COLUMN` + catch-`OperationalError`
+  pattern already used for `player_name`. This is the win threshold the
+  game was actually played at — needed to correctly replay the win
+  condition later (a different threshold could produce a different, or no,
+  connection). `chain_json` (already stored — every word the player
+  played, in order) doubles as the "full search" data; no new column
+  needed for that part.
+- `save_attempt` writes `chain.threshold` (always a real float — every
+  chain has one).
+- `list_high_scores` returns `has_solution: bool` per row (`threshold IS
+  NOT NULL`) so the frontend can grey out the "Solution" button without a
+  separate fetch per row.
 
-### Solver trace capture
+### Replay, not re-search
 
-- `Chain` gains a `solution_trace` field, alongside the existing
-  `solution_route`, both set together by `_compute_solution_route` and
-  carried through `Chain.to_dict()` / `Chain.from_dict()` exactly like
-  `solution_route` already is — so it survives threshold changes
-  (`/api/game/threshold` already recomputes `solution_route`; it now
-  recomputes `solution_trace` at the same time) and session round-trips.
-- `WordVectorModel.find_route` gains an optional `trace=None` parameter.
-  When the caller passes a list, each hop of the search appends one entry:
-  ```python
-  {
-      "from": current,                  # word the search was standing on
-      "current_similarity": ...,        # current -> to_word similarity
-      "candidates": [
-          {
-              "word": w,
-              "similarity_to_current": ...,
-              "similarity_to_target": ...,
-              "passed_threshold": bool,  # cleared win_threshold from `current`
-          }
-          for w in <neighbors_per_hop candidates returned by most_similar>
-      ],
-      "chosen": <word or None>,         # the candidate the search moved to, if any
-  }
-  ```
-  Existing callers (`_find_hint_word`'s bridge/continuation/fresh searches)
-  do not pass `trace`, so hint searches during play are untouched and pay
-  no extra cost.
-- `_compute_solution_route` passes a trace list to its primary search
-  (`_PAR_SEARCH_PARAMS`). If that fails and the fallback
-  (`_PAR_FALLBACK_SEARCH_PARAMS`) has to run, the fallback's hops are
-  appended to the same list — so a reveal for a puzzle that needed the
-  fallback shows the full attempt, including the primary search's
-  unsuccessful hops.
+`GET /api/high_scores/<id>/solution` reconstructs a fresh `Chain` from the
+stored primitives (`start_word`, `target_word`, `threshold`) and replays
+every stored word through `chain.add_word(word)`, in order. This
+regenerates the exact same `Step` data (similarities, digression flags)
+the player saw live, and lets `chain.winning_connection()` produce the
+real bridge — using the existing, already-tested `Chain` methods rather
+than inventing a new code path. If replay raises (a word no longer exists
+in a since-changed vocabulary), the endpoint reports the reveal as
+unavailable rather than erroring.
 
-### API
-
-- `GET /api/high_scores/<id>/solution` → `{"solution_route": [...] | null, "solution_trace": [...] | null}`.
-  404 if `id` doesn't exist at all; `null` fields (200) if it exists but
-  predates this feature or the puzzle had no findable route.
+Response shape:
+```json
+{
+  "available": true,
+  "start_word": "...", "target_word": "...", "start_target_similarity": 0.0,
+  "steps": [{"word": "...", "neighbor_similarity": 0.0, "target_similarity": 0.0, "is_digression": false, "similarities": [...]}],
+  "winning_connection": [{"a": "...", "b": "...", "similarity": 0.0}]
+}
+```
+or `{"available": false}` (threshold missing, or replay failed). 404 if
+the id doesn't exist at all.
 
 ### Frontend (`/scores`)
 
-- Each row gets a "Show solution" button, disabled (with a tooltip-style
-  title, e.g. "No solution recorded for this attempt") when
-  `has_solution` is false.
-- Clicking it opens a modal containing:
-  - An `<svg>` + tooltip `<div>`, same shape as the in-game ones in
-    `index.html`, loading the existing `graph.js`.
-  - A "Direct path" / "Full search" toggle, defaulting to "Direct path".
-  - **Direct path** reuses the existing `ChainGraph.reset(start, target, similarity)`
-    + `ChainGraph.showSuggestedRoute(route)` — the same call the in-game
-    give-up reveal already makes. No new `graph.js` code needed for this
-    part.
-  - **Full search** calls one new `ChainGraph` method,
-    `renderSearchTrace(startWord, targetWord, trace)`: resets the graph,
-    then for each hop adds a node per candidate word (reusing existing
-    nodes where a word repeats across hops) with an edge from `hop.from`
-    to each candidate — dimmed/thin for `passed_threshold: false`,
-    normal weight for `passed_threshold: true`, and the `chosen` edge
-    drawn the same way `highlightWinningConnection` already highlights
-    edges. This is additive: it doesn't touch `addStep`,
-    `highlightWinningConnection`, or any other live-gameplay method.
-- A `<select id="player-filter">` above the table, populated from the
-  distinct `player_name` values present in the currently loaded rows
-  (`"All players"` default). Selecting a name hides non-matching `<tr>`s
-  client-side; no new endpoint.
+- Each row gets a "Solution" button, disabled when `has_solution` is
+  false.
+- Clicking it opens a modal with a "Direct path" / "Full search" toggle:
+  - **Direct path** reuses the existing `ChainGraph.reset()` +
+    `showSuggestedRoute(path)` — `path` is derived from
+    `winning_connection` (`[start_word, ...winning_connection.map(l => l.b)]`).
+    Same call the in-game give-up reveal already makes; no new `graph.js`
+    code.
+  - **Full search** reuses the existing `ChainGraph.addStep(step)` for
+    every entry in `steps`, in order — exactly the same call live gameplay
+    already makes per move (so digressions render with the same
+    `.node-digression` styling players already recognize from playing),
+    then calls `highlightWinningConnection(winning_connection)` on top so
+    the actual bridge is still visually distinguishable within the full
+    graph. Zero new `graph.js` code needed for this feature at all — it's
+    entirely composed from the two rendering primitives that already
+    exist for live gameplay.
+- A `<select id="player-filter">` above the table, populated from distinct
+  `player_name` values in the currently loaded rows. Client-side filter,
+  no new endpoint.
 
 ## Constraints
 
-- Must not change the return shape of `find_route` for existing callers —
-  `trace` is opt-in via an extra parameter, default `None` means "don't
-  bother building trace data."
-- Must not retroactively compute or backfill `solution_route`/`solution_trace`
-  for existing rows — this is a going-forward feature only.
-- The "Full search" graph must remain readable at the trace sizes actually
-  produced (up to `max_hops` hops × up to `neighbors_per_hop` candidates
-  each, bounded by the existing `_PAR_SEARCH_PARAMS`/`_PAR_FALLBACK_SEARCH_PARAMS`
-  constants — no new size limits introduced by this feature).
+- Must not retroactively backfill `threshold` for existing rows — going
+  forward only.
+- Replay must use the same `Chain.add_word` validation path real gameplay
+  uses — no parallel/simplified reimplementation that could drift from
+  actual game rules.
 
 ## Edge Cases
 
-- Puzzle where no solution route could be found at all (`par_length is None`):
-  `solution_route`/`solution_trace` are both `None`; `has_solution` is
-  `False`; "Show solution" stays disabled for that row.
-- Player filter selected with zero matching rows in the top 50 (their best
-  attempt didn't crack it): table shows empty with the existing
-  "No high scores yet" state, scoped to being empty *for that filter* —
-  copy may need a small tweak so it doesn't imply zero scores exist at all
-  (decide exact wording at implementation time).
-- Clicking "Show solution" on a row whose attempt was deleted between page
-  load and click (via "Clear high scores" in another tab): the detail
-  fetch 404s; modal shows a plain error state instead of crashing.
-
-## Open Questions
-
-- Exact modal styling/copy — cosmetic, decide at implementation time,
-  consistent with the existing `.card`/`.btn` classes in `style.css`.
+- Attempt predates this feature (`threshold IS NULL`): `has_solution` is
+  `false`, endpoint returns `{"available": false}`.
+- Vocabulary changed since the game was played (a stored word no longer
+  exists): replay's `add_word` raises `ValueError`, caught, same
+  `{"available": false}` response rather than a 500.
+- Player filter selected with zero matching rows in the top 50: table
+  shows a filter-scoped empty state, distinct from "no high scores exist
+  at all."
+- Clicking "Solution" on a row whose attempt was deleted between page load
+  and click: the detail fetch 404s; modal shows a plain error state.
 
 ## Acceptance Criteria
 
-- [ ] `attempts` gains `solution_route_json`/`solution_trace_json`, added
-      via idempotent migration; existing rows unaffected (`NULL`).
-- [ ] Winning a game (random or manual mode) persists both fields for that
-      attempt whenever the puzzle had a findable solution route.
-- [ ] `GET /api/high_scores/<id>/solution` returns the stored route/trace,
-      or `null`/`null` for attempts predating this feature.
-- [ ] `/scores` shows a "Show solution" button per row, disabled when
+- [x] `attempts` gains `threshold`, added via idempotent migration;
+      existing rows unaffected (`NULL`).
+- [x] Winning a game persists the threshold it was played at.
+- [x] `GET /api/high_scores/<id>/solution` replays the stored words and
+      returns the real winning connection + full step list, or
+      `{"available": false}` for attempts predating this feature.
+- [x] `/scores` shows a "Solution" button per row, disabled when
       unavailable.
-- [ ] Clicking it shows the direct path via the existing graph component,
-      with a working toggle to the full search trace view.
-- [ ] A player-filter dropdown on `/scores` hides non-matching rows.
-- [ ] All existing tests still pass; new tests cover the trace-building
-      logic in `find_route`, the migration, `save_attempt`/`list_high_scores`
-      changes, and the new endpoint.
+- [x] Clicking it shows the actual winning bridge, with a working toggle
+      to see every word tried (including digressions).
+- [x] A player-filter dropdown on `/scores` hides non-matching rows.
+- [x] All existing tests pass; new tests cover the threshold migration,
+      `save_attempt`/`list_high_scores` changes, and the replay endpoint
+      (including the two-word-bridge and predates-feature cases).
