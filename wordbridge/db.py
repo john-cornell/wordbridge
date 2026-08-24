@@ -24,6 +24,14 @@ CREATE TABLE IF NOT EXISTS preferences (
 DEFAULT_THRESHOLD = 0.5
 
 
+def _normalize_chain_entry(entry):
+    """chain_json entries were a flat word string before hints were tracked
+    per-step; normalize both the old and new shape to {"word", "is_hint"}."""
+    if isinstance(entry, dict):
+        return entry
+    return {"word": entry, "is_hint": False}
+
+
 def init_db(db_path):
     conn = sqlite3.connect(db_path, check_same_thread=False)
     conn.executescript(SCHEMA)
@@ -73,7 +81,7 @@ def save_attempt(conn, chain, player_name=None):
         (
             chain.start_word,
             chain.target_word,
-            json.dumps([step.word for step in chain.steps]),
+            json.dumps([{"word": step.word, "is_hint": step.is_hint} for step in chain.steps]),
             chain.num_digressions(),
             chain.score(),
             datetime.now(timezone.utc).isoformat(),
@@ -106,10 +114,10 @@ def list_high_scores(conn, limit=50):
 
 
 def get_attempt_for_replay(conn, attempt_id):
-    """Returns (start_word, target_word, threshold, words) for the
+    """Returns (start_word, target_word, threshold, steps) for the
     high-scores "show solution" reveal, or None if no attempt with this id
-    exists. `words` is the ordered list of every word the player actually
-    played (including digressions), same as `chain_json` already stores.
+    exists. `steps` is the ordered list of every word the player actually
+    played (including digressions), each as {"word", "is_hint"}.
     `threshold` is None for attempts saved before this feature existed -
     without it, the win condition can't be replayed correctly, so the
     reveal is simply unavailable for them."""
@@ -119,7 +127,8 @@ def get_attempt_for_replay(conn, attempt_id):
     ).fetchone()
     if row is None:
         return None
-    return row[0], row[1], row[2], json.loads(row[3])
+    steps = [_normalize_chain_entry(entry) for entry in json.loads(row[3])]
+    return row[0], row[1], row[2], steps
 
 
 def clear_attempts(conn):
@@ -137,7 +146,7 @@ def list_attempts(conn):
             "id": row[0],
             "start_word": row[1],
             "target_word": row[2],
-            "chain": json.loads(row[3]),
+            "chain": [_normalize_chain_entry(entry)["word"] for entry in json.loads(row[3])],
             "num_digressions": row[4],
             "score": row[5],
             "created_at": row[6],

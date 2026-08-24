@@ -2,6 +2,25 @@
 
 ## Revision history
 
+**2026-08-24 (later): full search now shows real non-bridge connections,
+threshold displayed, hints marked, clear gated by password.** The first
+correction (below) still only drew the winning bridge's own edges in
+"Full search" - every other tried word floated disconnected, because the
+replay graph never got `setThreshold()` called on it (stuck at the
+default 0.7, hiding real sub-threshold-looking-but-actually-fine edges).
+Fixed: the endpoint now returns the game's actual `threshold`, the
+frontend applies it via `ChainGraph.setThreshold()` before rendering, and
+displays it as text in the modal. Words obtained via a hint are now
+tracked per-step (`Step.is_hint`, threaded through `chain_json`,
+`Chain.to_dict()`, and the replay endpoint) and get a distinct dashed
+purple border (`.node-hint` in `graph.js`/`style.css`) plus a tooltip
+suffix. Separately (not part of this feature, but done alongside it):
+"Clear high scores" now requires a password (hardcoded `"deleteme"` for
+now - a friction gate for an amateur site shared with friends, not real
+auth), and the misleading "Shortest path found" in-game message was
+renamed to "Shortest path I found... (maybe you can do better!)" since
+the solver's route is a greedy heuristic, not guaranteed-optimal.
+
 **2026-08-24: corrected after initial misimplementation.** The first version
 of this feature showed the AI solver's own pathfinding (`_compute_solution_route`'s
 best-effort route, plus a full "candidates considered per hop" search trace)

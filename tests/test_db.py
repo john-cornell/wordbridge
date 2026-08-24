@@ -169,8 +169,29 @@ def test_save_attempt_stores_threshold_for_replay(tiny_model):
     save_attempt(conn, chain)
     attempt_id = list_attempts(conn)[0]["id"]
 
-    assert get_attempt_for_replay(conn, attempt_id) == ("cat", "auto", 0.5, ["dog"])
+    assert get_attempt_for_replay(conn, attempt_id) == (
+        "cat",
+        "auto",
+        0.5,
+        [{"word": "dog", "is_hint": False}],
+    )
     assert list_high_scores(conn)[0]["has_solution"] is True
+
+
+def test_save_attempt_stores_is_hint_per_step(tiny_model):
+    conn = init_db(":memory:")
+    chain = Chain(tiny_model, start_word="cat", target_word="auto", threshold=0.11)
+    chain.add_word("dog")
+    chain.add_word("car", is_hint=True)
+
+    save_attempt(conn, chain)
+    attempt_id = list_attempts(conn)[0]["id"]
+
+    _, _, _, steps = get_attempt_for_replay(conn, attempt_id)
+    assert steps == [
+        {"word": "dog", "is_hint": False},
+        {"word": "car", "is_hint": True},
+    ]
 
 
 def test_get_attempt_for_replay_returns_none_for_unknown_id():
@@ -215,6 +236,27 @@ def test_init_db_migrates_an_existing_table_without_threshold_column(tmp_path):
     assert list_high_scores(conn)[0]["has_solution"] is False
     start_word, target_word, threshold, words = get_attempt_for_replay(conn, attempts[0]["id"])
     assert (start_word, target_word, threshold, words) == ("cat", "auto", None, [])
+
+
+def test_get_attempt_for_replay_normalizes_old_flat_string_chain_json(tmp_path):
+    # Rows saved between the threshold column existing and is_hint being
+    # tracked per-step have a real threshold but chain_json as a flat list
+    # of word strings, not {"word", "is_hint"} dicts.
+    db_path = str(tmp_path / "in_between.db")
+    conn = init_db(db_path)
+    conn.execute(
+        "INSERT INTO attempts (start_word, target_word, chain_json, num_digressions, score, created_at, threshold) "
+        "VALUES ('cat', 'auto', '[\"dog\", \"car\"]', 0, 100, '2026-01-01T00:00:00', 0.11)"
+    )
+    conn.commit()
+    attempt_id = list_attempts(conn)[0]["id"]
+
+    assert get_attempt_for_replay(conn, attempt_id) == (
+        "cat",
+        "auto",
+        0.11,
+        [{"word": "dog", "is_hint": False}, {"word": "car", "is_hint": False}],
+    )
 
 
 def test_list_attempts_orders_most_recent_first(tiny_model):

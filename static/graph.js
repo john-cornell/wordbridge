@@ -81,6 +81,7 @@ class ChainGraph {
       node.neighborSimilarity = step.neighbor_similarity;
       node.targetSimilarity = step.target_similarity;
       node.isDigression = step.is_digression;
+      node.isHint = Boolean(step.is_hint);
       this._updateNodeAppearance(node);
     } else {
       const anchor = this.nodes[this.nodes.length - 1];
@@ -94,6 +95,7 @@ class ChainGraph {
       node.neighborSimilarity = step.neighbor_similarity;
       node.targetSimilarity = step.target_similarity;
       node.isDigression = step.is_digression;
+      node.isHint = Boolean(step.is_hint);
 
       this.nodes.push(node);
       this._createNodeEl(node);
@@ -186,6 +188,7 @@ class ChainGraph {
       pinned,
       isDigression: false,
       isSuggested: false,
+      isHint: false,
       neighborSimilarity: null,
       targetSimilarity: null,
     };
@@ -246,6 +249,7 @@ class ChainGraph {
     els.rect.classList.toggle("node-pinned", node.pinned);
     els.rect.classList.toggle("node-digression", node.isDigression);
     els.rect.classList.toggle("node-suggested", node.isSuggested);
+    els.rect.classList.toggle("node-hint", node.isHint);
   }
 
   _createEdgeEl(edge) {
@@ -425,9 +429,10 @@ class ChainGraph {
   }
 
   _showTooltip(node, evt) {
+    const hintSuffix = node.isHint ? " (hint)" : "";
     const text = node.neighborSimilarity === null
-      ? node.word
-      : `${node.word} — neighbor: ${node.neighborSimilarity.toFixed(2)}, target: ${node.targetSimilarity.toFixed(2)}`;
+      ? `${node.word}${hintSuffix}`
+      : `${node.word}${hintSuffix}: neighbor ${node.neighborSimilarity.toFixed(2)}, target ${node.targetSimilarity.toFixed(2)}`;
     this.tooltip.textContent = text;
     this.tooltip.hidden = false;
     this._positionTooltip(evt);

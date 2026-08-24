@@ -37,6 +37,9 @@ _SEARCH_DEADLINE_SECONDS = 5.0
 # full vocabulary.
 _RANDOM_PAIR_POOL_SIZE = 30000
 _MAX_PLAYER_NAME_LENGTH = 30
+# Just a friction gate against an accidental click on a shared amateur
+# site, not real auth - fine as a hardcoded placeholder for now.
+_CLEAR_HIGH_SCORES_PASSWORD = "deleteme"
 
 
 def _get_model():
@@ -327,7 +330,7 @@ def hint():
         )
 
     cost = chain.use_hint()
-    step = chain.add_word(hint_word)
+    step = chain.add_word(hint_word, is_hint=True)
     result = _apply_step_and_check_win(chain, step, _get_db_conn())
     session["chain"] = chain.to_dict()
 
@@ -393,6 +396,12 @@ def high_scores():
 
 @bp.post("/api/high_scores/clear")
 def clear_high_scores():
+    payload = request.get_json(force=True) or {}
+    if not isinstance(payload, dict):
+        payload = {}
+    if payload.get("password") != _CLEAR_HIGH_SCORES_PASSWORD:
+        return jsonify(error="Wrong password"), 403
+
     clear_attempts(_get_db_conn())
     return jsonify(cleared=True)
 
@@ -407,7 +416,7 @@ def high_score_solution(attempt_id):
     if record is None:
         return jsonify(error="No attempt with this id"), 404
 
-    start_word, target_word, threshold, words = record
+    start_word, target_word, threshold, steps_played = record
     if threshold is None:
         # Predates this feature - the win threshold isn't recoverable, so
         # the game can't be replayed correctly.
@@ -416,8 +425,8 @@ def high_score_solution(attempt_id):
     model = _get_model()
     chain = Chain(model, start_word=start_word, target_word=target_word, threshold=threshold)
     try:
-        for word in words:
-            chain.add_word(word)
+        for entry in steps_played:
+            chain.add_word(entry["word"], is_hint=entry["is_hint"])
     except ValueError:
         # The vocabulary has changed since this game was played (e.g. a
         # word that was valid then no longer exists) - nothing reliable to
@@ -428,6 +437,7 @@ def high_score_solution(attempt_id):
         available=True,
         start_word=start_word,
         target_word=target_word,
+        threshold=threshold,
         start_target_similarity=chain.start_target_similarity(),
         steps=[
             {
@@ -435,6 +445,7 @@ def high_score_solution(attempt_id):
                 "neighbor_similarity": step.neighbor_similarity,
                 "target_similarity": step.target_similarity,
                 "is_digression": step.is_digression,
+                "is_hint": step.is_hint,
                 "similarities": step.similarities,
             }
             for step in chain.steps
