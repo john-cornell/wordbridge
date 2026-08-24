@@ -140,7 +140,7 @@ function applyMoveResult(data, messagePrefix) {
       .join(" ");
     let message = `${messagePrefix || ""}You connected the words! ${path}`;
     if (!data.saved_to_high_scores) {
-      message += " (Not saved to high scores — you gave up on this pair earlier.)";
+      message += " (Not saved to high scores: you gave up on this pair earlier.)";
     }
     statusEl.textContent = message;
     document.getElementById("word-input").disabled = true;
@@ -149,7 +149,7 @@ function applyMoveResult(data, messagePrefix) {
     document.getElementById("give-up-btn").disabled = true;
     document.getElementById("restart-btn").hidden = true;
   } else if (data.over_soft_cap) {
-    statusEl.textContent = `${messagePrefix || ""}Chain is getting long — score is dropping fast.`;
+    statusEl.textContent = `${messagePrefix || ""}Chain is getting long. Score is dropping fast.`;
   } else {
     statusEl.textContent = messagePrefix || "";
   }

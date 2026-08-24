@@ -156,7 +156,7 @@ def test_restart_after_win_is_rejected(client):
 
     assert response.status_code == 400
     assert response.get_json() == {
-        "error": "Can't restart a won game — start a new game instead."
+        "error": "Can't restart a won game. Start a new game instead."
     }
 
 
@@ -190,7 +190,7 @@ def test_add_word_after_win_returns_400_and_does_not_add_second_history_row(clie
 
     assert response.status_code == 400
     assert response.get_json() == {
-        "error": "This game is already complete — start a new game."
+        "error": "This game is already complete. Start a new game instead."
     }
 
     history_response = client.get("/api/history")
@@ -361,7 +361,7 @@ def test_hint_rejected_on_completed_chain(client):
 
     assert response.status_code == 400
     assert response.get_json() == {
-        "error": "This game is already complete — start a new game."
+        "error": "This game is already complete. Start a new game instead."
     }
 
 
@@ -445,7 +445,7 @@ def test_give_up_locks_chain_against_further_add_word(client):
 
     assert response.status_code == 400
     assert response.get_json() == {
-        "error": "This game is already complete — start a new game."
+        "error": "This game is already complete. Start a new game instead."
     }
 
 
@@ -458,7 +458,7 @@ def test_give_up_on_already_won_chain_returns_400(client):
 
     assert response.status_code == 400
     assert response.get_json() == {
-        "error": "This game is already complete — start a new game."
+        "error": "This game is already complete. Start a new game instead."
     }
 
 
@@ -504,6 +504,59 @@ def test_high_scores_includes_the_player_name_set_before_winning(client):
 
     entry = client.get("/api/high_scores").get_json()["scores"][0]
     assert entry["player_name"] == "Alice"
+
+
+def test_high_scores_includes_has_solution_flag(client):
+    client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
+    client.post("/api/game/threshold", json={"threshold": 0.05})
+    client.post("/api/game/word", json={"word": "dog"})  # wins
+
+    entry = client.get("/api/high_scores").get_json()["scores"][0]
+    assert entry["has_solution"] is True
+
+
+def test_high_score_solution_returns_the_precomputed_route_and_trace(client):
+    client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
+    client.post("/api/game/threshold", json={"threshold": 0.05})
+    client.post("/api/game/word", json={"word": "dog"})  # wins
+
+    attempt_id = client.get("/api/high_scores").get_json()["scores"][0]["id"]
+    response = client.get(f"/api/high_scores/{attempt_id}/solution")
+    data = response.get_json()
+
+    assert response.status_code == 200
+    assert data["solution_route"] == ["cat", "dog", "auto"]
+    assert data["solution_trace"] == [
+        {
+            "from": "cat",
+            "current_similarity": 0.0,
+            "candidates": data["solution_trace"][0]["candidates"],
+            "chosen": "dog",
+        }
+    ]
+
+
+def test_high_score_solution_returns_404_for_unknown_id(client):
+    response = client.get("/api/high_scores/999/solution")
+    assert response.status_code == 404
+
+
+def test_high_score_solution_is_null_when_puzzle_had_no_findable_route(client, tiny_model, monkeypatch):
+    # Win condition is decided by the player's own played words (BFS over
+    # threshold-connected known words), independent of whether the solver
+    # could find a route at puzzle-creation time — these can disagree.
+    monkeypatch.setattr(tiny_model, "find_route", lambda *args, **kwargs: None)
+    client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
+    client.post("/api/game/threshold", json={"threshold": 0.05})
+    win_response = client.post("/api/game/word", json={"word": "dog"})
+    assert win_response.get_json()["won"] is True
+
+    entry = client.get("/api/high_scores").get_json()["scores"][0]
+    assert entry["has_solution"] is False
+
+    response = client.get(f"/api/high_scores/{entry['id']}/solution")
+    assert response.status_code == 200
+    assert response.get_json() == {"solution_route": None, "solution_trace": None}
 
 
 def test_get_player_name_defaults_to_null(client):

@@ -11,7 +11,17 @@ class Step:
 
 
 class Chain:
-    def __init__(self, model, start_word, target_word, threshold=0.7, soft_cap=15, par_length=None, solution_route=None):
+    def __init__(
+        self,
+        model,
+        start_word,
+        target_word,
+        threshold=0.7,
+        soft_cap=15,
+        par_length=None,
+        solution_route=None,
+        solution_trace=None,
+    ):
         self._model = model
         self.start_word = start_word
         self.target_word = target_word
@@ -19,6 +29,7 @@ class Chain:
         self.soft_cap = soft_cap
         self.par_length = par_length
         self.solution_route = solution_route
+        self.solution_trace = solution_trace
         self.steps = []
         self.completed = False
         self.won = False
@@ -227,6 +238,7 @@ class Chain:
             "hint_cost_total": self.hint_cost_total,
             "par_length": self.par_length,
             "solution_route": self.solution_route,
+            "solution_trace": self.solution_trace,
             "steps": [
                 {
                     "word": step.word,
@@ -248,6 +260,7 @@ class Chain:
             soft_cap=data["soft_cap"],
             par_length=data.get("par_length"),
             solution_route=data.get("solution_route"),
+            solution_trace=data.get("solution_trace"),
         )
         chain.steps = [Step(**step) for step in data["steps"]]
         chain.completed = data.get("completed", False)

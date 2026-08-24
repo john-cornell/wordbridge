@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Wordbridge — High Scores</title>
+  <title>Wordbridge: High Scores</title>
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
@@ -14,6 +14,12 @@
 
   <main>
     <section class="card">
+      <div class="row">
+        <label for="player-filter" class="controls-row-label">Player</label>
+        <select id="player-filter" class="text-input">
+          <option value="">All players</option>
+        </select>
+      </div>
       <div class="table-wrap">
         <table id="scores-table">
           <thead>
@@ -23,16 +29,36 @@
               <th>Destination</th>
               <th>Score</th>
               <th>Date</th>
+              <th></th>
             </tr>
           </thead>
           <tbody id="scores-body"></tbody>
         </table>
       </div>
-      <p id="empty-message" hidden>No high scores yet — go win a game!</p>
+      <p id="empty-message" hidden>No high scores yet. Go win a game!</p>
+      <p id="filter-empty-message" hidden>No high scores for this player yet.</p>
       <button type="button" id="clear-scores-btn" class="btn btn-danger-outline">Clear high scores</button>
     </section>
   </main>
 
+  <div id="solution-modal" class="modal-overlay" hidden>
+    <div class="modal card">
+      <div class="modal-header">
+        <h2 class="card-title">Solution</h2>
+        <button type="button" id="solution-modal-close" class="btn btn-outline">Close</button>
+      </div>
+      <div class="row">
+        <button type="button" id="solution-view-direct" class="btn btn-chip active">Direct path</button>
+        <button type="button" id="solution-view-full" class="btn btn-chip">Full search</button>
+      </div>
+      <svg id="solution-graph" viewBox="0 0 700 360" width="700" height="360"></svg>
+      <p id="solution-error" hidden>Couldn't load the solution for this attempt.</p>
+    </div>
+  </div>
+
+  <div id="solution-tooltip" hidden></div>
+
+  <script src="/graph.js"></script>
   <script src="/scores.js"></script>
 </body>
 </html>

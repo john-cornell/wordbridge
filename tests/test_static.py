@@ -51,3 +51,19 @@ def test_index_page_links_to_scores_page(client):
     response = client.get("/")
     assert response.status_code == 200
     assert b'href="/scores"' in response.data
+
+
+def test_scores_page_includes_player_filter_and_solution_modal(client):
+    response = client.get("/scores")
+    assert response.status_code == 200
+    assert b'id="player-filter"' in response.data
+    assert b'id="solution-modal"' in response.data
+    assert b'id="solution-graph"' in response.data
+    assert b'id="solution-view-direct"' in response.data
+    assert b'id="solution-view-full"' in response.data
+
+
+def test_scores_page_loads_graph_js(client):
+    response = client.get("/scores")
+    assert response.status_code == 200
+    assert b'<script src="/graph.js">' in response.data
