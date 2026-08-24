@@ -67,3 +67,17 @@ def test_scores_page_loads_graph_js(client):
     response = client.get("/scores")
     assert response.status_code == 200
     assert b'<script src="/graph.js">' in response.data
+
+
+def test_version_js_served(client):
+    response = client.get("/version.js")
+    assert response.status_code == 200
+    assert b"/api/health" in response.data
+
+
+def test_index_and_scores_pages_include_version_footer_and_script(client):
+    for path in ("/", "/scores"):
+        response = client.get(path)
+        assert response.status_code == 200
+        assert b'id="version-info"' in response.data
+        assert b'<script src="/version.js">' in response.data

@@ -160,7 +160,7 @@ def scores_page():
 
 @bp.get("/api/health")
 def health():
-    return jsonify(status="ok")
+    return jsonify(status="ok", version=current_app.config.get("VERSION", "unknown"))
 
 
 @bp.get("/api/player_name")
