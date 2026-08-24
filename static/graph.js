@@ -28,7 +28,6 @@ class ChainGraph {
     this.edgeLabelEls = new Map();
     this._winningEdges = new Set();
     this._suggestedEdges = new Set();
-    this._traceEdges = new Map();
     this._nodesByWord = new Map();
     this._nextId = 1;
     this.dragNode = null;
@@ -48,7 +47,6 @@ class ChainGraph {
     this.edgeLabelEls.clear();
     this._winningEdges = new Set();
     this._suggestedEdges = new Set();
-    this._traceEdges = new Map();
     this._nodesByWord.clear();
     this._nextId = 1;
     this.dragNode = null;
@@ -142,52 +140,6 @@ class ChainGraph {
       }
       this._suggestedEdges.add(edge);
     }
-    this._renderEdges();
-  }
-
-  // Renders the solver's full search trace from a high-scores "show
-  // solution" reveal: every candidate word considered at each hop, not
-  // just the ones on the winning path. Additive to the live-gameplay
-  // rendering (addStep/highlightWinningConnection/showSuggestedRoute) —
-  // this is the only method that populates _traceEdges.
-  renderSearchTrace(startWord, targetWord, trace) {
-    this.reset(startWord, targetWord, null);
-
-    let current = startWord;
-    for (const hop of trace || []) {
-      const fromNode = this._getOrCreateNode(hop.from);
-      for (const candidate of hop.candidates || []) {
-        const candidateNode = this._getOrCreateNode(candidate.word);
-        // Not shown as an edge label (too cluttered at real candidate
-        // counts) but available on hover, same as live-gameplay nodes.
-        candidateNode.neighborSimilarity = candidate.similarity_to_current;
-        candidateNode.targetSimilarity = candidate.similarity_to_target;
-        let edge = this._findEdgeForWordPair(hop.from, candidate.word);
-        if (!edge) {
-          edge = { aId: fromNode.id, bId: candidateNode.id, similarity: candidate.similarity_to_current };
-          this.edges.push(edge);
-          this._createEdgeEl(edge);
-        }
-        const chosen = hop.chosen === candidate.word;
-        this._traceEdges.set(edge, { passed: candidate.passed_threshold, chosen });
-        if (chosen) this._suggestedEdges.add(edge);
-      }
-      if (hop.chosen) current = hop.chosen;
-    }
-
-    // The solver's last accepted hop can land on a word that's merely
-    // close enough to the target rather than the literal target word —
-    // the win still routes through one final implicit edge to it.
-    if (current !== targetWord) {
-      let finalEdge = this._findEdgeForWordPair(current, targetWord);
-      if (!finalEdge) {
-        finalEdge = { aId: this._getOrCreateNode(current).id, bId: this._getOrCreateNode(targetWord).id, similarity: 1 };
-        this.edges.push(finalEdge);
-        this._createEdgeEl(finalEdge);
-      }
-      this._suggestedEdges.add(finalEdge);
-    }
-
     this._renderEdges();
   }
 
@@ -311,12 +263,10 @@ class ChainGraph {
 
     const isWinning = this._winningEdges.has(edge);
     const isSuggested = this._suggestedEdges.has(edge);
-    const traceInfo = this._traceEdges.get(edge);
-    const visible = edge.similarity >= this.threshold || isWinning || isSuggested || traceInfo !== undefined;
+    const visible = edge.similarity >= this.threshold || isWinning || isSuggested;
     line.style.display = visible ? "" : "none";
     line.classList.toggle("edge-winning", isWinning);
     line.classList.toggle("edge-suggested", isSuggested);
-    line.classList.toggle("edge-rejected", traceInfo !== undefined && !traceInfo.passed && !isSuggested);
     if (!visible) {
       this._removeEdgeLabel(edge);
       return;
@@ -334,16 +284,6 @@ class ChainGraph {
     } else if (isSuggested) {
       line.setAttribute("stroke-width", MAX_EDGE_WIDTH.toFixed(2));
       line.style.opacity = "1";
-      this._removeEdgeLabel(edge);
-    } else if (traceInfo !== undefined) {
-      // A candidate the solver considered but didn't take: still visible
-      // regardless of the graph's own threshold (that's the whole point
-      // of the full-search reveal), dimmer when it never even cleared the
-      // threshold from `current`. No label — a real search can surface
-      // dozens of candidates per hop, which would clutter fast; hovering
-      // the node shows its similarity instead.
-      line.setAttribute("stroke-width", (traceInfo.passed ? MAX_EDGE_WIDTH / 2 : MIN_EDGE_WIDTH).toFixed(2));
-      line.style.opacity = traceInfo.passed ? "0.6" : "0.25";
       this._removeEdgeLabel(edge);
     } else {
       const range = Math.max(maxSimilarity - this.threshold, 0.0001);

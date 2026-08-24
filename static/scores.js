@@ -5,7 +5,7 @@ const solutionGraph = new ChainGraph(
   document.getElementById("solution-tooltip")
 );
 
-let currentSolution = null; // { startWord, targetWord, solutionRoute, solutionTrace }
+let currentSolution = null; // { startWord, targetWord, startTargetSimilarity, steps, winningConnection }
 let currentScores = [];
 
 function filterValueFor(playerName) {
@@ -126,15 +126,8 @@ async function openSolution(entry) {
   modal.hidden = false;
 
   const response = await fetch(`/api/high_scores/${entry.id}/solution`);
-  if (!response.ok) {
-    currentSolution = null;
-    graphEl.hidden = true;
-    errorEl.hidden = false;
-    return;
-  }
-
-  const data = await response.json();
-  if (!data.solution_route) {
+  const data = response.ok ? await response.json() : null;
+  if (!data || !data.available) {
     currentSolution = null;
     graphEl.hidden = true;
     errorEl.hidden = false;
@@ -142,10 +135,11 @@ async function openSolution(entry) {
   }
 
   currentSolution = {
-    startWord: entry.start_word,
-    targetWord: entry.target_word,
-    solutionRoute: data.solution_route,
-    solutionTrace: data.solution_trace || [],
+    startWord: data.start_word,
+    targetWord: data.target_word,
+    startTargetSimilarity: data.start_target_similarity,
+    steps: data.steps,
+    winningConnection: data.winning_connection,
   };
   setSolutionView("direct");
 }
@@ -156,11 +150,19 @@ function setSolutionView(view) {
 
   if (!currentSolution) return;
 
+  solutionGraph.reset(currentSolution.startWord, currentSolution.targetWord, currentSolution.startTargetSimilarity);
+
   if (view === "direct") {
-    solutionGraph.reset(currentSolution.startWord, currentSolution.targetWord, null);
-    solutionGraph.showSuggestedRoute(currentSolution.solutionRoute);
+    // Only the actual bridge the player made - not every word they tried.
+    const path = [currentSolution.startWord, ...currentSolution.winningConnection.map((link) => link.b)];
+    solutionGraph.showSuggestedRoute(path);
   } else {
-    solutionGraph.renderSearchTrace(currentSolution.startWord, currentSolution.targetWord, currentSolution.solutionTrace);
+    // Every word the player actually played, including digressions -
+    // replayed exactly like live gameplay renders each step.
+    for (const step of currentSolution.steps) {
+      solutionGraph.addStep(step);
+    }
+    solutionGraph.highlightWinningConnection(currentSolution.winningConnection);
   }
 }
 

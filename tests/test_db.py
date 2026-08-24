@@ -2,7 +2,7 @@ import threading
 
 from wordbridge.db import (
     clear_attempts,
-    get_attempt_solution,
+    get_attempt_for_replay,
     get_last_threshold,
     init_db,
     list_attempts,
@@ -161,45 +161,31 @@ def test_clear_attempts_empties_the_table(tiny_model):
     assert list_high_scores(conn) == []
 
 
-def test_save_attempt_stores_solution_route_and_trace_when_present(tiny_model):
+def test_save_attempt_stores_threshold_for_replay(tiny_model):
     conn = init_db(":memory:")
     chain = Chain(tiny_model, start_word="cat", target_word="auto", threshold=0.5)
-    chain.solution_route = ["cat", "dog", "car", "auto"]
-    chain.solution_trace = [{"from": "cat", "current_similarity": 0.0, "candidates": [], "chosen": "dog"}]
     chain.add_word("dog")
 
     save_attempt(conn, chain)
     attempt_id = list_attempts(conn)[0]["id"]
 
-    assert get_attempt_solution(conn, attempt_id) == (chain.solution_route, chain.solution_trace)
+    assert get_attempt_for_replay(conn, attempt_id) == ("cat", "auto", 0.5, ["dog"])
     assert list_high_scores(conn)[0]["has_solution"] is True
 
 
-def test_save_attempt_without_solution_stores_none(tiny_model):
+def test_get_attempt_for_replay_returns_none_for_unknown_id():
     conn = init_db(":memory:")
-    chain = Chain(tiny_model, start_word="cat", target_word="auto", threshold=0.5)
-    chain.add_word("dog")
-
-    save_attempt(conn, chain)
-    attempt_id = list_attempts(conn)[0]["id"]
-
-    assert get_attempt_solution(conn, attempt_id) == (None, None)
-    assert list_high_scores(conn)[0]["has_solution"] is False
+    assert get_attempt_for_replay(conn, 999) is None
 
 
-def test_get_attempt_solution_returns_none_for_unknown_id():
-    conn = init_db(":memory:")
-    assert get_attempt_solution(conn, 999) is None
-
-
-def test_init_db_migrates_an_existing_table_without_solution_columns(tmp_path):
+def test_init_db_migrates_an_existing_table_without_threshold_column(tmp_path):
     import sqlite3
 
-    db_path = str(tmp_path / "legacy_no_solution.db")
+    db_path = str(tmp_path / "legacy_no_threshold.db")
 
     # Build a database with the pre-solution-reveal schema, as if created by
-    # an older version of this app (has player_name, but not the two
-    # solution_*_json columns added for the high-scores reveal).
+    # an older version of this app (has player_name, but not the threshold
+    # column added for the high-scores reveal).
     legacy_conn = sqlite3.connect(db_path)
     legacy_conn.execute(
         """
@@ -227,7 +213,8 @@ def test_init_db_migrates_an_existing_table_without_solution_columns(tmp_path):
 
     assert len(attempts) == 1
     assert list_high_scores(conn)[0]["has_solution"] is False
-    assert get_attempt_solution(conn, attempts[0]["id"]) == (None, None)
+    start_word, target_word, threshold, words = get_attempt_for_replay(conn, attempts[0]["id"])
+    assert (start_word, target_word, threshold, words) == ("cat", "auto", None, [])
 
 
 def test_list_attempts_orders_most_recent_first(tiny_model):

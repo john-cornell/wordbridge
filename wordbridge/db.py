@@ -12,8 +12,7 @@ CREATE TABLE IF NOT EXISTS attempts (
     score INTEGER NOT NULL,
     created_at TEXT NOT NULL,
     player_name TEXT,
-    solution_route_json TEXT,
-    solution_trace_json TEXT
+    threshold REAL
 );
 
 CREATE TABLE IF NOT EXISTS preferences (
@@ -35,14 +34,15 @@ def init_db(db_path):
         conn.execute("ALTER TABLE attempts ADD COLUMN player_name TEXT")
     except sqlite3.OperationalError:
         pass  # column already present
-    for column in ("solution_route_json", "solution_trace_json"):
-        try:
-            # Same migration pattern, for attempts saved before the
-            # high-scores "show solution" reveal existed — those rows keep
-            # NULL here and the reveal is simply unavailable for them.
-            conn.execute(f"ALTER TABLE attempts ADD COLUMN {column} TEXT")
-        except sqlite3.OperationalError:
-            pass  # column already present
+    try:
+        # Same migration pattern, for attempts saved before the high-scores
+        # "show solution" reveal existed — those rows keep NULL here and
+        # the reveal is simply unavailable for them (the win threshold used
+        # is needed to correctly replay the game and find the actual
+        # winning connection, and isn't otherwise recoverable).
+        conn.execute("ALTER TABLE attempts ADD COLUMN threshold REAL")
+    except sqlite3.OperationalError:
+        pass  # column already present
     conn.commit()
     return conn
 
@@ -66,9 +66,9 @@ def save_attempt(conn, chain, player_name=None):
         """
         INSERT INTO attempts (
             start_word, target_word, chain_json, num_digressions, score, created_at, player_name,
-            solution_route_json, solution_trace_json
+            threshold
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             chain.start_word,
@@ -78,8 +78,7 @@ def save_attempt(conn, chain, player_name=None):
             chain.score(),
             datetime.now(timezone.utc).isoformat(),
             player_name,
-            json.dumps(chain.solution_route) if chain.solution_route is not None else None,
-            json.dumps(chain.solution_trace) if chain.solution_trace is not None else None,
+            chain.threshold,
         ),
     )
     conn.commit()
@@ -88,7 +87,7 @@ def save_attempt(conn, chain, player_name=None):
 def list_high_scores(conn, limit=50):
     rows = conn.execute(
         "SELECT id, start_word, target_word, score, created_at, player_name, "
-        "solution_route_json IS NOT NULL "
+        "threshold IS NOT NULL "
         "FROM attempts ORDER BY score DESC, id DESC LIMIT ?",
         (limit,),
     ).fetchall()
@@ -106,20 +105,21 @@ def list_high_scores(conn, limit=50):
     ]
 
 
-def get_attempt_solution(conn, attempt_id):
-    """Returns (solution_route, solution_trace) for the high-scores "show
-    solution" reveal, or None if no attempt with this id exists. Either or
-    both of the pair can be None themselves — an attempt saved before this
-    feature existed, or a puzzle with no findable route."""
+def get_attempt_for_replay(conn, attempt_id):
+    """Returns (start_word, target_word, threshold, words) for the
+    high-scores "show solution" reveal, or None if no attempt with this id
+    exists. `words` is the ordered list of every word the player actually
+    played (including digressions), same as `chain_json` already stores.
+    `threshold` is None for attempts saved before this feature existed -
+    without it, the win condition can't be replayed correctly, so the
+    reveal is simply unavailable for them."""
     row = conn.execute(
-        "SELECT solution_route_json, solution_trace_json FROM attempts WHERE id = ?",
+        "SELECT start_word, target_word, threshold, chain_json FROM attempts WHERE id = ?",
         (attempt_id,),
     ).fetchone()
     if row is None:
         return None
-    solution_route = json.loads(row[0]) if row[0] is not None else None
-    solution_trace = json.loads(row[1]) if row[1] is not None else None
-    return solution_route, solution_trace
+    return row[0], row[1], row[2], json.loads(row[3])
 
 
 def clear_attempts(conn):

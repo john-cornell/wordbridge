@@ -71,7 +71,6 @@ class WordVectorModel:
         win_threshold=0.7,
         exclude=frozenset(),
         deadline=None,
-        trace=None,
     ):
         current = from_word
         current_similarity = self._kv.similarity(current, to_word)
@@ -95,25 +94,14 @@ class WordVectorModel:
             # itself uses to draw an edge. Being one of current's nearest
             # neighbors by rank doesn't imply that; picking on rank alone
             # produced routes the graph would never actually connect.
-            eligible_neighbors = [w for w in neighbors if w in self._filtered_vocab_set and w not in visited]
-            candidates = [w for w in eligible_neighbors if self._kv.similarity(current, w) >= win_threshold]
-
-            if trace is not None:
-                hop_candidates = [
-                    {
-                        "word": w,
-                        "similarity_to_current": float(self._kv.similarity(current, w)),
-                        "similarity_to_target": float(self._kv.similarity(w, to_word)),
-                        "passed_threshold": w in candidates,
-                    }
-                    for w in eligible_neighbors
-                ]
-
+            candidates = [
+                w
+                for w in neighbors
+                if w in self._filtered_vocab_set
+                and w not in visited
+                and self._kv.similarity(current, w) >= win_threshold
+            ]
             if not candidates:
-                if trace is not None:
-                    trace.append(
-                        {"from": current, "current_similarity": float(current_similarity), "candidates": hop_candidates, "chosen": None}
-                    )
                 return None
 
             best = max(candidates, key=lambda w: self._kv.similarity(w, to_word))
@@ -122,16 +110,7 @@ class WordVectorModel:
                 # Nothing reachable from here is any closer than we already
                 # are — stop rather than wander sideways through a cluster
                 # of near-synonyms or drift backwards.
-                if trace is not None:
-                    trace.append(
-                        {"from": current, "current_similarity": float(current_similarity), "candidates": hop_candidates, "chosen": None}
-                    )
                 return None
-
-            if trace is not None:
-                trace.append(
-                    {"from": current, "current_similarity": float(current_similarity), "candidates": hop_candidates, "chosen": best}
-                )
 
             path.append(best)
             if best == to_word or best_similarity >= win_threshold:

@@ -30,7 +30,7 @@ async function persistThreshold(value) {
     const data = await postJSON("/api/game/threshold", { threshold: Number(value) });
     parInfoEl.textContent =
       typeof data.par_length === "number"
-        ? `Shortest path found: ${data.par_length} word${data.par_length === 1 ? "" : "s"}`
+        ? `Shortest path I found: ${data.par_length} word${data.par_length === 1 ? "" : "s"} (maybe you can do better!)`
         : "";
   } catch (err) {
     statusEl.textContent = err.message;
@@ -160,7 +160,8 @@ function showGame(startWord, targetWord, startTargetSimilarity, threshold, parLe
   targetWordEl.textContent = targetWord;
   chainGraph.reset(startWord, targetWord, startTargetSimilarity);
   scoreEl.textContent = "";
-  parInfoEl.textContent = typeof parLength === "number" ? `Shortest path found: ${parLength} word${parLength === 1 ? "" : "s"}` : "";
+  parInfoEl.textContent =
+    typeof parLength === "number" ? `Shortest path I found: ${parLength} word${parLength === 1 ? "" : "s"} (maybe you can do better!)` : "";
   statusEl.textContent = "";
   setupStatusEl.textContent = "";
   document.getElementById("word-input").disabled = false;
