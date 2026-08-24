@@ -15,6 +15,22 @@ change**, not as an afterthought.
 - `deploy/wordbridge.service` — the systemd unit; copied to `/etc/systemd/system/` per `DEPLOY.md`.
 - `deploy/nginx-wordbridge.conf` — the reverse-proxy config; copied to `/etc/nginx/sites-available/` per `DEPLOY.md`. **Required, not optional** — gunicorn binds to `127.0.0.1` only and is never reachable directly. See the "known gotcha" below for why.
 
+## Known gotcha: fireworks-js is loaded from a CDN, not self-hosted
+
+`index.html` loads `fireworks-js` (win-celebration animation) from
+`cdn.jsdelivr.net`, pinned to an exact version with a Subresource
+Integrity hash — this is the app's only external runtime dependency;
+every other script (`app.js`, `graph.js`, `scores.js`, `version.js`) is
+self-hosted. If that CDN request ever fails (outage, firewall, ad-blocker,
+offline demo), `app.js` guards against it (`typeof Fireworks !== "undefined"`)
+so the rest of the game keeps working with no fireworks, rather than the
+whole script crashing on load. **If you touch this again, keep that guard**
+— an earlier version of this feature had no guard, and a failed CDN load
+would have thrown before any of the game's own button/event wiring ran,
+taking down the entire page over a purely cosmetic feature. Bump both the
+version in the `src` URL and the `integrity` hash together if upgrading;
+jsdelivr publishes hashes at `https://data.jsdelivr.com/v1/packages/npm/fireworks-js@<version>?structure=flat`.
+
 ## Not needed on the server (harmless, just along for the ride via git clone)
 
 - `tests/`, `scripts/`, `pytest.ini` — dev/CI only.
