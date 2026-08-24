@@ -4,6 +4,7 @@ from flask import Blueprint, current_app, jsonify, request, session
 
 from .db import (
     clear_attempts,
+    get_attempt_solution,
     get_last_threshold,
     init_db,
     list_attempts,
@@ -103,13 +104,23 @@ def _compute_solution_route(model, start_word, target_word, threshold, deadline)
     rather than re-searching from wherever the player currently is — that
     re-searching was what produced disconnected/incomplete give-up routes.
     Tries a generous search first, then an even more expensive one before
-    giving up. Returns the full path including start_word, or None."""
-    route = model.find_route(start_word, target_word, win_threshold=threshold, deadline=deadline, **_PAR_SEARCH_PARAMS)
+    giving up. Returns (route, trace): route is the full path including
+    start_word (or None); trace is every hop the solver actually considered
+    across both attempts, for the high-scores "show solution" reveal."""
+    trace = []
+    route = model.find_route(
+        start_word, target_word, win_threshold=threshold, deadline=deadline, trace=trace, **_PAR_SEARCH_PARAMS
+    )
     if route is None:
         route = model.find_route(
-            start_word, target_word, win_threshold=threshold, deadline=deadline, **_PAR_FALLBACK_SEARCH_PARAMS
+            start_word, target_word, win_threshold=threshold, deadline=deadline, trace=trace, **_PAR_FALLBACK_SEARCH_PARAMS
         )
-    return [start_word] + route if route is not None else None
+    if route is None:
+        # No route means nothing to reveal — including any partial trace
+        # from a search that made real hops but still couldn't connect,
+        # so has_solution stays a single flag covering both fields.
+        return None, None
+    return [start_word] + route, trace
 
 
 def _apply_step_and_check_win(chain, step, conn):
@@ -194,14 +205,15 @@ def new_game():
         if errors:
             return jsonify(error="\n".join(errors)), 400
         start_word, target_word = word1, word2
-        solution_route = _compute_solution_route(model, start_word, target_word, threshold, _new_deadline())
+        solution_route, solution_trace = _compute_solution_route(model, start_word, target_word, threshold, _new_deadline())
     else:
         start_word = target_word = None
         solution_route = None
+        solution_trace = []
         deadline = _new_deadline()
         for _ in range(_PAR_REROLL_ATTEMPTS):
             start_word, target_word = model.random_pair(pool_size=_RANDOM_PAIR_POOL_SIZE)
-            solution_route = _compute_solution_route(model, start_word, target_word, threshold, deadline)
+            solution_route, solution_trace = _compute_solution_route(model, start_word, target_word, threshold, deadline)
             if solution_route is not None or time.monotonic() >= deadline:
                 break
         # If every reroll failed (or the wall-clock budget ran out first —
@@ -218,6 +230,7 @@ def new_game():
         threshold=threshold,
         par_length=par_length,
         solution_route=solution_route,
+        solution_trace=solution_trace,
     )
     session["chain"] = chain.to_dict()
 
@@ -252,7 +265,9 @@ def set_threshold():
         return jsonify(error="threshold must be between 0 and 1"), 400
 
     chain.threshold = threshold
-    chain.solution_route = _compute_solution_route(model, chain.start_word, chain.target_word, threshold, _new_deadline())
+    chain.solution_route, chain.solution_trace = _compute_solution_route(
+        model, chain.start_word, chain.target_word, threshold, _new_deadline()
+    )
     chain.par_length = len(chain.solution_route) - 1 if chain.solution_route is not None else None
     session["chain"] = chain.to_dict()
     set_last_threshold(_get_db_conn(), threshold)
@@ -269,7 +284,7 @@ def add_word():
     chain = Chain.from_dict(model, session["chain"])
 
     if chain.completed:
-        return jsonify(error="This game is already complete — start a new game."), 400
+        return jsonify(error="This game is already complete. Start a new game instead."), 400
 
     payload = request.get_json(force=True) or {}
     if not isinstance(payload, dict):
@@ -299,7 +314,7 @@ def hint_cost():
     chain = Chain.from_dict(model, session["chain"])
 
     if chain.completed:
-        return jsonify(error="This game is already complete — start a new game."), 400
+        return jsonify(error="This game is already complete. Start a new game instead."), 400
 
     return jsonify(cost=chain.next_hint_cost())
 
@@ -313,7 +328,7 @@ def hint():
     chain = Chain.from_dict(model, session["chain"])
 
     if chain.completed:
-        return jsonify(error="This game is already complete — start a new game."), 400
+        return jsonify(error="This game is already complete. Start a new game instead."), 400
 
     hint_word = _find_hint_word(chain, model, _new_deadline())
     if hint_word is None:
@@ -342,7 +357,7 @@ def give_up():
     chain = Chain.from_dict(model, session["chain"])
 
     if chain.completed:
-        return jsonify(error="This game is already complete — start a new game."), 400
+        return jsonify(error="This game is already complete. Start a new game instead."), 400
 
     best_step = chain.best_step()
 
@@ -366,7 +381,7 @@ def restart_game():
     chain = Chain.from_dict(model, session["chain"])
 
     if chain.won:
-        return jsonify(error="Can't restart a won game — start a new game instead."), 400
+        return jsonify(error="Can't restart a won game. Start a new game instead."), 400
 
     chain.restart()
     session["chain"] = chain.to_dict()
@@ -394,3 +409,12 @@ def high_scores():
 def clear_high_scores():
     clear_attempts(_get_db_conn())
     return jsonify(cleared=True)
+
+
+@bp.get("/api/high_scores/<int:attempt_id>/solution")
+def high_score_solution(attempt_id):
+    result = get_attempt_solution(_get_db_conn(), attempt_id)
+    if result is None:
+        return jsonify(error="No attempt with this id"), 404
+    solution_route, solution_trace = result
+    return jsonify(solution_route=solution_route, solution_trace=solution_trace)
