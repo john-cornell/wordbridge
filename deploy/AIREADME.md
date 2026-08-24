@@ -124,6 +124,22 @@ you just pushed, rather than assuming the restart picked it up. Falls back
 to `"unknown"` if `git` isn't available or the checkout somehow has no
 `.git` — that itself is a signal something about the deploy is unusual.
 
+**Standard deploy + confirm, for a change that touched Python code:**
+```bash
+cd /opt/wordbridge
+sudo -u wordbridge git pull
+sudo systemctl restart wordbridge
+sleep 60
+curl -s http://127.0.0.1:8000/api/health
+```
+The `sleep 60` before the `curl` matters — loading the word2vec model takes
+30-60s per worker on every boot (see `app.py`'s own startup log line), and
+`curl`ing before that finishes just hits "connection refused" rather than
+a real answer, which reads as a failed deploy when it's actually still
+booting. Skip the sleep only for a change that's purely static assets
+(HTML/CSS/JS, no `.py` files) or docs — those don't need `systemctl restart`
+at all, since Flask serves them straight off disk on every request.
+
 ## Keep this current when
 
 - A new top-level package/module gets imported by `app.py` and isn't under `wordbridge/`.
