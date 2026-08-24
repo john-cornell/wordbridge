@@ -146,6 +146,7 @@ def test_list_high_scores_orders_by_score_descending(tiny_model):
     assert [entry["score"] for entry in scores] == [90, 80]
     assert scores[0]["start_word"] == "cat"
     assert scores[0]["target_word"] == "auto"
+    assert scores[0]["threshold"] == 0.5
     assert "created_at" in scores[0]
 
 

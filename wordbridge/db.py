@@ -94,8 +94,7 @@ def save_attempt(conn, chain, player_name=None):
 
 def list_high_scores(conn, limit=50):
     rows = conn.execute(
-        "SELECT id, start_word, target_word, score, created_at, player_name, "
-        "threshold IS NOT NULL "
+        "SELECT id, start_word, target_word, score, created_at, player_name, threshold "
         "FROM attempts ORDER BY score DESC, id DESC LIMIT ?",
         (limit,),
     ).fetchall()
@@ -107,7 +106,8 @@ def list_high_scores(conn, limit=50):
             "score": row[3],
             "created_at": row[4],
             "player_name": row[5],
-            "has_solution": bool(row[6]),
+            "threshold": row[6],
+            "has_solution": row[6] is not None,
         }
         for row in rows
     ]

@@ -515,6 +515,16 @@ def test_high_scores_includes_has_solution_flag(client):
     assert entry["has_solution"] is True
 
 
+def test_high_scores_includes_the_threshold_used(client):
+    client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
+    client.post("/api/game/threshold", json={"threshold": 0.11})
+    client.post("/api/game/word", json={"word": "dog"})
+    client.post("/api/game/word", json={"word": "car"})  # wins
+
+    entry = client.get("/api/high_scores").get_json()["scores"][0]
+    assert entry["threshold"] == 0.11
+
+
 def test_high_score_solution_replays_every_played_word_and_the_winning_bridge(client):
     # cat-dog-car-auto only connects at 0.11 once BOTH dog and car are
     # played, in that order (dog-auto alone isn't close enough) - a real
