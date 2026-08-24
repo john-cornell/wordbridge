@@ -3,7 +3,8 @@ import random
 import numpy as np
 from gensim.models import KeyedVectors
 
-from wordbridge.model import WordVectorModel
+import wordbridge.model as model_module
+from wordbridge.model import WordVectorModel, load_google_news_model
 
 
 def test_contains_known_word(tiny_model):
@@ -174,3 +175,57 @@ def test_find_route_trace_records_a_failed_hop_when_nothing_clears_threshold(tin
     assert len(trace) == 1
     assert trace[0]["chosen"] is None
     assert all(c["passed_threshold"] is False for c in trace[0]["candidates"])
+
+
+def test_load_google_news_model_uses_the_local_cache_directly_when_present(tmp_path, monkeypatch):
+    # api.load()'s catalog lookup does an unconditional network fetch on
+    # every call, even just to resolve a path - and a single bad response
+    # can permanently corrupt its own fallback cache (confirmed in
+    # production, 2026-08-24). When the model is already cached at its
+    # well-known path, the network must never be touched at all.
+    cache_dir = tmp_path / "word2vec-google-news-300"
+    cache_dir.mkdir()
+    cached_file = cache_dir / "word2vec-google-news-300.gz"
+    cached_file.write_bytes(b"")
+    monkeypatch.setenv("GENSIM_DATA_DIR", str(tmp_path))
+
+    api_load_calls = []
+    monkeypatch.setattr(
+        "gensim.downloader.load",
+        lambda *args, **kwargs: api_load_calls.append((args, kwargs)),
+    )
+
+    captured_path = {}
+
+    def fake_load_word2vec_format(path, binary, limit):
+        captured_path["path"] = path
+        return "fake-keyed-vectors"
+
+    monkeypatch.setattr(model_module.KeyedVectors, "load_word2vec_format", fake_load_word2vec_format)
+    monkeypatch.setattr(model_module, "WordVectorModel", lambda kv, vocab_limit: (kv, vocab_limit))
+
+    result = load_google_news_model(vocab_limit=10)
+
+    assert api_load_calls == []
+    assert captured_path["path"] == str(cached_file)
+    assert result == ("fake-keyed-vectors", 10)
+
+
+def test_load_google_news_model_falls_back_to_api_load_when_nothing_cached(tmp_path, monkeypatch):
+    monkeypatch.setenv("GENSIM_DATA_DIR", str(tmp_path))  # empty - nothing cached here
+
+    fake_downloaded_path = str(tmp_path / "downloaded.gz")
+    monkeypatch.setattr("gensim.downloader.load", lambda *args, **kwargs: fake_downloaded_path)
+
+    captured_path = {}
+
+    def fake_load_word2vec_format(path, binary, limit):
+        captured_path["path"] = path
+        return "fake-keyed-vectors"
+
+    monkeypatch.setattr(model_module.KeyedVectors, "load_word2vec_format", fake_load_word2vec_format)
+    monkeypatch.setattr(model_module, "WordVectorModel", lambda kv, vocab_limit: (kv, vocab_limit))
+
+    load_google_news_model(vocab_limit=10)
+
+    assert captured_path["path"] == fake_downloaded_path
