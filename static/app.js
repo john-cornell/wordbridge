@@ -221,6 +221,7 @@ async function addWord() {
     if (!data.won) {
       input.disabled = false;
       btn.disabled = false;
+      input.focus();
     }
   } catch (err) {
     statusEl.textContent = err.message;
