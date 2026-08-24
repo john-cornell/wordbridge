@@ -71,6 +71,25 @@ cert, doesn't request or renew one, as long as it's still within its
 validity window) and guarantees the `# managed by Certbot` blocks are
 correct for whatever you just changed.
 
+## Known gotcha: gensim's downloader can poison its own cache
+
+`load_google_news_model()` used to call `api.load(..., return_path=True)`
+just to resolve a path to the already-cached model file. That still makes
+gensim's downloader do an unconditional network fetch of its remote
+dataset catalog on *every single worker boot* — and `_load_info()` only
+falls back to its own local cache file (`~/gensim-data/information.json`)
+on a network *exception*, not on a "succeeded but empty" response. On
+2026-08-24, one bad response overwrote that cache file with empty
+content, and every subsequent boot crashed with a `JSONDecodeError`
+(gunicorn crash-looping workers, nginx serving 502s) until someone
+manually deleted the corrupted file. Fixed by checking the well-known,
+fixed cache path (`~/gensim-data/word2vec-google-news-300/word2vec-google-news-300.gz`)
+directly first, and only touching the network at all on a genuinely fresh
+install with nothing downloaded yet. If this ever needs a true fresh
+download again (new server, cache wiped), that first boot will be slower
+and does need working network access - after that, boots never touch the
+network again.
+
 ## Confirming a deploy actually landed
 
 `GET /api/health` returns `{"status": "ok", "version": "<short git hash>"}`,

@@ -1,3 +1,4 @@
+import os
 import random
 import re
 import time
@@ -151,6 +152,21 @@ class WordVectorModel:
 def load_google_news_model(vocab_limit=200000):
     import gensim.downloader as api
 
+    # api.load(..., return_path=True) still calls gensim's downloader
+    # info()/_load_info(), which does an UNCONDITIONAL network fetch of a
+    # remote dataset catalog on every single call - even though all we
+    # actually want is a path to a file that's already fully cached from a
+    # previous boot. Worse: _load_info() only falls back to its own local
+    # cache file on a network *exception*, not on a "succeeded but empty"
+    # response, so one bad response permanently overwrites that cache with
+    # garbage. Confirmed in production, 2026-08-24: a JSONDecodeError on
+    # every subsequent gunicorn worker boot (crash-looping, 502s) until the
+    # corrupted cache file was manually deleted. Check the well-known,
+    # fixed cache path directly first, and only touch the network at all on
+    # a genuinely fresh install with nothing downloaded yet.
+    gensim_data_dir = os.environ.get("GENSIM_DATA_DIR", os.path.expanduser("~/gensim-data"))
+    cached_path = os.path.join(gensim_data_dir, "word2vec-google-news-300", "word2vec-google-news-300.gz")
+
     # Load with a hard cap instead of api.load()'s default (which parses
     # and materializes the FULL ~3-million-word file, only for nearly all
     # of it to become garbage the instant WordVectorModel builds its own
@@ -166,6 +182,6 @@ def load_google_news_model(vocab_limit=200000):
     # real number (200,000 / 0.136 ≈ 1.47M, +~15% margin) rather than
     # another guess. Re-tune from the actual logged vocab_size if it's
     # still short, or vocab_limit changes.
-    path = api.load("word2vec-google-news-300", return_path=True)
+    path = cached_path if os.path.exists(cached_path) else api.load("word2vec-google-news-300", return_path=True)
     keyed_vectors = KeyedVectors.load_word2vec_format(path, binary=True, limit=int(vocab_limit * 8.5))
     return WordVectorModel(keyed_vectors, vocab_limit=vocab_limit)
