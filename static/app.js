@@ -6,6 +6,38 @@ const scoreEl = document.getElementById("score");
 const parInfoEl = document.getElementById("par-info");
 const statusEl = document.getElementById("status");
 const setupStatusEl = document.getElementById("setup-status");
+const fireworksOverlay = document.getElementById("fireworks-overlay");
+
+const fireworks = new Fireworks.default(fireworksOverlay, {
+  autoresize: true,
+  opacity: 0.5,
+  acceleration: 1.05,
+  friction: 0.97,
+  gravity: 1.5,
+  particles: 40,
+  traceLength: 3,
+  traceSpeed: 10,
+  explosion: 5,
+  intensity: 20,
+  flickering: 50,
+});
+
+let fireworksTimeout;
+
+function showFireworks() {
+  clearTimeout(fireworksTimeout);
+
+  fireworks.start();
+
+  fireworksTimeout = setTimeout(() => {
+    fireworks.stop(true);
+  }, 10000);
+}
+
+function stopFireworks() {
+  clearTimeout(fireworksTimeout);
+  fireworks.stop(true);
+}
 
 const chainGraph = new ChainGraph(
   document.getElementById("chain-graph"),
@@ -147,6 +179,7 @@ function applyMoveResult(data, messagePrefix) {
   setDifficultyButtonsDisabled(true);
 
   if (data.won) {
+    showFireworks();
     chainGraph.highlightWinningConnection(data.winning_connection);
     const path = data.winning_connection
       .map((link) => `${link.a} —${link.similarity.toFixed(2)}→ ${link.b}`)
@@ -331,6 +364,8 @@ document.getElementById("restart-btn").addEventListener("click", async () => {
 });
 
 document.getElementById("new-game-btn").addEventListener("click", () => {
+  stopFireworks();
+
   document.getElementById("word1-input").value = "";
   document.getElementById("word2-input").value = "";
   setupStatusEl.textContent = "";
