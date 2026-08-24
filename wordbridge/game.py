@@ -7,6 +7,7 @@ class Step:
     neighbor_similarity: float
     target_similarity: float
     is_digression: bool
+    is_hint: bool = False
     similarities: list = field(default_factory=list)
 
 
@@ -35,7 +36,7 @@ class Chain:
         self.hints_used = 0
         self.hint_cost_total = 0
 
-    def add_word(self, word):
+    def add_word(self, word, is_hint=False):
         if not self._model.contains(word):
             raise ValueError(f"'{word}' is not a recognized word")
 
@@ -65,7 +66,7 @@ class Chain:
             for other in other_words
         ]
 
-        step = Step(word, neighbor_similarity, target_similarity, is_digression, similarities)
+        step = Step(word, neighbor_similarity, target_similarity, is_digression, is_hint, similarities)
         self.steps.append(step)
         return step
 
@@ -242,6 +243,7 @@ class Chain:
                     "neighbor_similarity": step.neighbor_similarity,
                     "target_similarity": step.target_similarity,
                     "is_digression": step.is_digression,
+                    "is_hint": step.is_hint,
                 }
                 for step in self.steps
             ],

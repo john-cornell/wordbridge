@@ -5,7 +5,7 @@ const solutionGraph = new ChainGraph(
   document.getElementById("solution-tooltip")
 );
 
-let currentSolution = null; // { startWord, targetWord, startTargetSimilarity, steps, winningConnection }
+let currentSolution = null; // { startWord, targetWord, startTargetSimilarity, threshold, steps, winningConnection }
 let currentScores = [];
 
 function filterValueFor(playerName) {
@@ -113,7 +113,18 @@ document.getElementById("player-filter").addEventListener("change", renderScores
 
 document.getElementById("clear-scores-btn").addEventListener("click", async () => {
   if (!confirm("Clear all high scores? This can't be undone.")) return;
-  await fetch("/api/high_scores/clear", { method: "POST" });
+  const password = prompt("Password to clear high scores:");
+  if (password === null) return;
+
+  const response = await fetch("/api/high_scores/clear", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ password }),
+  });
+  if (!response.ok) {
+    alert("Wrong password.");
+    return;
+  }
   loadHighScores();
 });
 
@@ -138,9 +149,12 @@ async function openSolution(entry) {
     startWord: data.start_word,
     targetWord: data.target_word,
     startTargetSimilarity: data.start_target_similarity,
+    threshold: data.threshold,
     steps: data.steps,
     winningConnection: data.winning_connection,
   };
+  document.getElementById("solution-threshold").textContent =
+    `Threshold: ${data.threshold.toFixed(2)}. Dashed purple border marks a hint.`;
   setSolutionView("direct");
 }
 
@@ -151,6 +165,10 @@ function setSolutionView(view) {
   if (!currentSolution) return;
 
   solutionGraph.reset(currentSolution.startWord, currentSolution.targetWord, currentSolution.startTargetSimilarity);
+  // Same threshold the game was actually played at, so non-bridge
+  // connections among the tried words show up exactly like they did live -
+  // not just the winning bridge.
+  solutionGraph.setThreshold(currentSolution.threshold);
 
   if (view === "direct") {
     // Only the actual bridge the player made - not every word they tried.

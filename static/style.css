@@ -304,6 +304,15 @@ h1 {
   stroke-dasharray: 3, 2;
 }
 
+/* Layers on top of whichever fill rule above applies (pinned/digression/
+   default) - only overrides the border, so a hint's digression status
+   (fill color) stays visible alongside the "this was a hint" marker. */
+.node rect.node-hint {
+  stroke: #8b5cf6;
+  stroke-width: 3;
+  stroke-dasharray: 4, 2;
+}
+
 .node text {
   font-size: 14px;
   fill: #fff;
@@ -452,4 +461,10 @@ h1 {
 #solution-error {
   color: var(--danger);
   margin: 0.75rem 0 0;
+}
+
+#solution-threshold {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin: 0.5rem 0 0;
 }

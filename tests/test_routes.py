@@ -538,6 +538,20 @@ def test_high_score_solution_replays_every_played_word_and_the_winning_bridge(cl
     # "Direct path" - only the winning bridge the player actually made.
     assert [link["a"] for link in data["winning_connection"]] == ["cat", "dog", "car"]
     assert [link["b"] for link in data["winning_connection"]] == ["dog", "car", "auto"]
+    assert data["threshold"] == 0.11
+
+
+def test_high_score_solution_marks_which_words_were_hints(client):
+    client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
+    client.post("/api/game/threshold", json={"threshold": 0.11})
+    client.post("/api/game/word", json={"word": "dog"})
+    client.post("/api/game/hint")  # picks "car" and wins, per the bridge above
+
+    attempt_id = client.get("/api/high_scores").get_json()["scores"][0]["id"]
+    data = client.get(f"/api/high_scores/{attempt_id}/solution").get_json()
+
+    is_hint_by_word = {step["word"]: step["is_hint"] for step in data["steps"]}
+    assert is_hint_by_word == {"dog": False, "car": True}
 
 
 def test_high_score_solution_returns_404_for_unknown_id(client):
@@ -597,12 +611,28 @@ def test_clear_high_scores_empties_both_high_scores_and_history(client):
     client.post("/api/game/threshold", json={"threshold": 0.05})
     client.post("/api/game/word", json={"word": "dog"})  # wins (bridges cat to auto)
 
-    response = client.post("/api/high_scores/clear")
+    response = client.post("/api/high_scores/clear", json={"password": "deleteme"})
 
     assert response.status_code == 200
     assert response.get_json() == {"cleared": True}
     assert client.get("/api/high_scores").get_json() == {"scores": []}
     assert client.get("/api/history").get_json() == {"attempts": []}
+
+
+def test_clear_high_scores_rejects_wrong_password(client):
+    client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
+    client.post("/api/game/threshold", json={"threshold": 0.05})
+    client.post("/api/game/word", json={"word": "dog"})  # wins
+
+    response = client.post("/api/high_scores/clear", json={"password": "wrong"})
+
+    assert response.status_code == 403
+    assert len(client.get("/api/high_scores").get_json()["scores"]) == 1
+
+
+def test_clear_high_scores_rejects_missing_password(client):
+    response = client.post("/api/high_scores/clear", json={})
+    assert response.status_code == 403
 
 
 def test_win_after_restart_following_give_up_is_not_saved_as_high_score(client):
