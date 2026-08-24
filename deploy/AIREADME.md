@@ -156,6 +156,16 @@ booting. Skip the sleep only for a change that's purely static assets
 (HTML/CSS/JS, no `.py` files) or docs — those don't need `systemctl restart`
 at all, since Flask serves them straight off disk on every request.
 
+**Aliases already set up on the VPS** (the `ubuntu` user's shell config —
+not tracked in this repo, just documented here so they aren't forgotten):
+```bash
+alias wbcheck='curl -m 5 http://127.0.0.1:8000/api/health'
+alias wblogs='sudo journalctl -u wordbridge -n 100 --no-pager'
+alias wbrestart='sudo systemctl restart wordbridge'
+alias wbstatus='sudo systemctl status wordbridge'
+alias wbtail='sudo journalctl -u wordbridge -f'
+```
+
 ## Keep this current when
 
 - A new top-level package/module gets imported by `app.py` and isn't under `wordbridge/`.
