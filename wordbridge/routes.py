@@ -123,12 +123,20 @@ def _compute_solution_route(model, start_word, target_word, threshold, deadline)
     return [start_word] + route, trace
 
 
-def _apply_step_and_check_win(chain, step, conn):
+def _apply_step_and_check_win(chain, step, conn, model):
     winning_connection = chain.winning_connection()
     won = winning_connection is not None
     saved_to_high_scores = False
     if won:
         if not chain.gave_up_before:
+            # solution_trace isn't carried in the session (see Chain.to_dict),
+            # so it's recomputed here, once, only for the winning attempt
+            # actually being saved. chain.solution_route stays whatever was
+            # already computed at puzzle-creation time - only the trace
+            # itself is regenerated.
+            _, chain.solution_trace = _compute_solution_route(
+                model, chain.start_word, chain.target_word, chain.threshold, _new_deadline()
+            )
             save_attempt(conn, chain, player_name=session.get("player_name"))
             saved_to_high_scores = True
         chain.mark_won()
@@ -299,7 +307,7 @@ def add_word():
     # chain.completed is guaranteed False here (an already-completed chain
     # returns 400 above, before add_word is ever called), so this is the
     # first time this chain has met the win condition.
-    result = _apply_step_and_check_win(chain, step, _get_db_conn())
+    result = _apply_step_and_check_win(chain, step, _get_db_conn(), model)
     session["chain"] = chain.to_dict()
 
     return jsonify(**result)
@@ -342,7 +350,7 @@ def hint():
 
     cost = chain.use_hint()
     step = chain.add_word(hint_word)
-    result = _apply_step_and_check_win(chain, step, _get_db_conn())
+    result = _apply_step_and_check_win(chain, step, _get_db_conn(), model)
     session["chain"] = chain.to_dict()
 
     return jsonify(hint_word=hint_word, cost=cost, **result)

@@ -90,6 +90,27 @@ download again (new server, cache wiped), that first boot will be slower
 and does need working network access - after that, boots never touch the
 network again.
 
+## Known gotcha: the session is a client-side cookie with a ~4KB limit
+
+Flask's default session backend signs and stores the *entire* session in a
+browser cookie - there's no server-side session store here. `Chain.to_dict()`
+gets serialized into that cookie on every single request while a game is
+in progress. On 2026-08-24, adding the full solver search trace
+(`solution_trace` - many hops x many candidates each, easily tens of KB)
+to that dict blew the cookie past browsers' ~4093-byte limit. Browsers
+silently drop cookies over that limit rather than erroring, so this
+didn't fail loudly - games just randomly lost their session mid-play
+("No game in progress" / a generic server error), with `UserWarning: The
+'session' cookie is too large` buried in the gunicorn journal log as the
+only clue. Fixed by never putting `solution_trace` in the session at all;
+it's recomputed fresh, once, only at the moment a game is actually won
+and saved (see `_apply_step_and_check_win` in `routes.py`).
+
+**If you add anything to `Chain.to_dict()`/`session["chain"]` in the
+future**: keep it small (a handful of words/numbers, not search results,
+candidate lists, or anything that scales with search breadth) or it needs
+the same "compute on demand instead of carrying in session" treatment.
+
 ## Confirming a deploy actually landed
 
 `GET /api/health` returns `{"status": "ok", "version": "<short git hash>"}`,

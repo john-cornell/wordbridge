@@ -238,7 +238,12 @@ class Chain:
             "hint_cost_total": self.hint_cost_total,
             "par_length": self.par_length,
             "solution_route": self.solution_route,
-            "solution_trace": self.solution_trace,
+            # solution_trace is deliberately NOT persisted here - it can be
+            # tens of KB (many hops x many candidates each), which blew the
+            # session cookie past browsers' ~4KB limit and got it silently
+            # dropped mid-game (confirmed in production, 2026-08-24).
+            # Recomputed fresh, once, only for a winning attempt actually
+            # being saved - see routes.py's _apply_step_and_check_win.
             "steps": [
                 {
                     "word": step.word,
@@ -260,7 +265,6 @@ class Chain:
             soft_cap=data["soft_cap"],
             par_length=data.get("par_length"),
             solution_route=data.get("solution_route"),
-            solution_trace=data.get("solution_trace"),
         )
         chain.steps = [Step(**step) for step in data["steps"]]
         chain.completed = data.get("completed", False)
