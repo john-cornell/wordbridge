@@ -84,7 +84,10 @@ def test_set_threshold_updates_chain_before_any_word_added(client):
     response = client.post("/api/game/threshold", json={"threshold": 0.01})
 
     assert response.status_code == 200
-    assert response.get_json() == {"threshold": 0.01, "par_length": 2}
+    data = response.get_json()
+    assert data["threshold"] == 0.01
+    assert data["par_length"] == 2
+    assert "start_target_similarity" in data
 
     # A threshold this low should now make even a weak similarity a win.
     word_response = client.post("/api/game/word", json={"word": "dog"})
