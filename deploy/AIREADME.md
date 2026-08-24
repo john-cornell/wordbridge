@@ -10,7 +10,7 @@ change**, not as an afterthought.
 
 - `app.py` — entry point; loads the model and builds the `app:app` object gunicorn serves.
 - `wordbridge/` — the actual application package (routes, game logic, model wrapper, db).
-- `static/` — served directly by Flask (`index.html`, `scores.html`, `app.js`, `graph.js`, `style.css`).
+- `static/` — served directly by Flask (`index.html`, `scores.html`, `app.js`, `graph.js`, `scores.js`, `version.js`, `style.css`).
 - `requirements.txt` — pinned deps. **Currently unsplit**: `flask`, `gensim`, `numpy`, `gunicorn` are the real runtime deps; `pytest` and `playwright` are dev/test-only but still get installed on the server today because there's one shared file. Fine for a toy app's install size — flag it if that ever needs to change.
 - `deploy/wordbridge.service` — the systemd unit; copied to `/etc/systemd/system/` per `DEPLOY.md`.
 - `deploy/nginx-wordbridge.conf` — the reverse-proxy config; copied to `/etc/nginx/sites-available/` per `DEPLOY.md`. **Required, not optional** — gunicorn binds to `127.0.0.1` only and is never reachable directly. See the "known gotcha" below for why.
@@ -71,10 +71,23 @@ cert, doesn't request or renew one, as long as it's still within its
 validity window) and guarantees the `# managed by Certbot` blocks are
 correct for whatever you just changed.
 
+## Confirming a deploy actually landed
+
+`GET /api/health` returns `{"status": "ok", "version": "<short git hash>"}`,
+and both pages show that same hash as a small muted footer
+(`wordbridge/version.py` shells out to `git rev-parse --short HEAD` against
+the checkout at startup — no manual version bump to remember, and it can't
+drift from what's actually deployed since this is a real `git pull`
+checkout, not a copy). After running the update steps in `DEPLOY.md` §4,
+check the footer (or `curl 127.0.0.1:8000/api/health`) matches the commit
+you just pushed, rather than assuming the restart picked it up. Falls back
+to `"unknown"` if `git` isn't available or the checkout somehow has no
+`.git` — that itself is a signal something about the deploy is unusual.
+
 ## Keep this current when
 
 - A new top-level package/module gets imported by `app.py` and isn't under `wordbridge/`.
 - `requirements.txt` changes (new runtime dep, or the runtime/dev deps finally get split into two files).
 - The systemd unit (`deploy/wordbridge.service`) changes what it references (paths, env vars, bind address).
 - `deploy/nginx-wordbridge.conf` changes (timeouts, proxy target, added TLS/domain config via certbot).
-- The deploy mechanism itself changes (e.g. away from `git clone` to a real upload/staging step) — if that happens, this file's whole premise changes and needs a rewrite, not a patch.
+- The deploy mechanism itself changes (e.g. away from `git clone` to a real upload/staging step) — if that happens, this file's whole premise changes and needs a rewrite, not a patch. It would also break `wordbridge/version.py`'s assumption that the checkout has a working `.git` directory to read from.
