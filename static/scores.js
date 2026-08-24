@@ -1,4 +1,13 @@
 const ANONYMOUS_FILTER_VALUE = "__anonymous__";
+const MONTH_ABBREVIATIONS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function formatDate(isoString) {
+  const date = new Date(isoString);
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = MONTH_ABBREVIATIONS[date.getMonth()];
+  const year = String(date.getFullYear()).slice(-2);
+  return `${day}-${month}-${year}`;
+}
 
 const solutionGraph = new ChainGraph(
   document.getElementById("solution-graph"),
@@ -77,8 +86,12 @@ function renderScoresTable() {
     score.textContent = entry.score;
     row.appendChild(score);
 
+    const threshold = document.createElement("td");
+    threshold.textContent = typeof entry.threshold === "number" ? entry.threshold.toFixed(2) : "";
+    row.appendChild(threshold);
+
     const date = document.createElement("td");
-    date.textContent = new Date(entry.created_at).toLocaleString();
+    date.textContent = formatDate(entry.created_at);
     row.appendChild(date);
 
     const actions = document.createElement("td");
