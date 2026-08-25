@@ -55,6 +55,36 @@ def test_closest_unconnected_pair_prefers_the_closest_cross_component_bridge(tin
     assert {anchor, other} == {"dog", "auto"}
 
 
+def test_would_win_instantly_true_when_start_and_target_already_connected(tiny_model):
+    # cat-dog similarity (~0.99) already clears this threshold on its own.
+    chain = Chain(tiny_model, start_word="cat", target_word="dog", threshold=0.5)
+    assert chain.would_win_instantly() is True
+
+
+def test_would_win_instantly_false_when_start_and_target_not_connected(tiny_model):
+    chain = Chain(tiny_model, start_word="cat", target_word="auto", threshold=0.5)
+    assert chain.would_win_instantly() is False
+
+
+def test_would_win_instantly_false_once_a_word_has_been_played(tiny_model):
+    # Threshold is locked once steps exist, so this can only ever matter
+    # for the very first word - not after.
+    chain = Chain(tiny_model, start_word="cat", target_word="auto", threshold=0.05)
+    chain.add_word("dog")
+    chain.threshold = 0.99  # even if it somehow became "instant" in hindsight
+    assert chain.would_win_instantly() is False
+
+
+def test_add_word_rejects_first_word_when_start_and_target_already_connected(tiny_model):
+    chain = Chain(tiny_model, start_word="cat", target_word="dog", threshold=0.5)
+    try:
+        chain.add_word("car")
+        assert False, "expected ValueError"
+    except ValueError as exc:
+        assert "already connected at this threshold" in str(exc)
+    assert chain.steps == []
+
+
 def test_winning_connection_returns_none_when_not_won(tiny_model):
     chain = Chain(tiny_model, start_word="cat", target_word="auto", threshold=0.5)
     chain.add_word("dog")

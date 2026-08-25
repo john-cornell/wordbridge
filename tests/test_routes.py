@@ -128,6 +128,30 @@ def test_add_word_without_active_game_returns_error(client):
     assert response.status_code == 400
 
 
+def test_add_word_rejects_when_start_and_target_already_connected(client):
+    # cat-dog similarity (~0.99) already clears threshold=0.5 on its own -
+    # any word played would win instantly, which shouldn't be allowed to
+    # pollute high scores.
+    client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "dog"})
+    client.post("/api/game/threshold", json={"threshold": 0.5})
+
+    response = client.post("/api/game/word", json={"word": "car"})
+
+    assert response.status_code == 400
+    assert "already connected at this threshold" in response.get_json()["error"]
+    assert client.get("/api/high_scores").get_json() == {"scores": []}
+
+
+def test_hint_rejects_when_start_and_target_already_connected(client):
+    client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "dog"})
+    client.post("/api/game/threshold", json={"threshold": 0.5})
+
+    response = client.post("/api/game/hint")
+
+    assert response.status_code == 400
+    assert "already connected at this threshold" in response.get_json()["error"]
+
+
 def test_add_word_progresses_chain_and_persists_on_win(client):
     client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
     client.post("/api/game/threshold", json={"threshold": 0.05})

@@ -37,6 +37,16 @@ class Chain:
         self.hint_cost_total = 0
 
     def add_word(self, word, is_hint=False):
+        if self.would_win_instantly():
+            # Any word at all would win here (start and target are already
+            # connected on their own at this threshold) - not a real puzzle,
+            # and letting it through just pollutes high scores with a
+            # meaningless one-word "win". Threshold is locked once steps
+            # exist, so this can only ever trigger on the very first word.
+            raise ValueError(
+                "These words are already connected at this threshold - pick a harder setting first."
+            )
+
         if not self._model.contains(word):
             raise ValueError(f"'{word}' is not a recognized word")
 
@@ -72,6 +82,12 @@ class Chain:
 
     def start_target_similarity(self):
         return self._model.similarity(self.start_word, self.target_word)
+
+    def would_win_instantly(self):
+        """True if the very first word played would win regardless of which
+        word it is, because start and target are already connected on their
+        own at this threshold."""
+        return not self.steps and self.start_target_similarity() >= self.threshold
 
     def best_step(self):
         if not self.steps:

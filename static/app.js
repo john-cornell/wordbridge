@@ -73,13 +73,26 @@ function applyThreshold(value) {
   }
 }
 
+function isInstantWin(parLength, startTargetSimilarity, threshold) {
+  // The direct start->target similarity already clears the threshold, so
+  // literally any word the player adds wins instantly - not a real puzzle
+  // at this difficulty.
+  return parLength === 1 && startTargetSimilarity >= threshold;
+}
+
+function setInstantWinLock(locked) {
+  // Backend also refuses this (Chain.would_win_instantly), but disabling
+  // the controls here means the player never gets as far as submitting a
+  // word that was always going to be rejected.
+  document.getElementById("word-input").disabled = locked;
+  document.getElementById("add-word-btn").disabled = locked;
+  document.getElementById("hint-btn").disabled = locked;
+}
+
 function formatParInfo(parLength, startTargetSimilarity, threshold) {
   if (typeof parLength === "number") {
-    if (parLength === 1 && startTargetSimilarity >= threshold) {
-      // The direct start->target similarity already clears the threshold,
-      // so literally any word the player adds wins instantly - not a real
-      // puzzle at this difficulty.
-      return "These words are already connected at this threshold - any word you add will win instantly. Try a harder setting?";
+    if (isInstantWin(parLength, startTargetSimilarity, threshold)) {
+      return "These words are already connected at this threshold. Try a harder setting to make it more fun!";
     }
     return `Shortest path I found: ${parLength} word${parLength === 1 ? "" : "s"} (maybe you can do better!)`;
   }
@@ -93,6 +106,7 @@ async function persistThreshold(value) {
   try {
     const data = await postJSON("/api/game/threshold", { threshold: Number(value) });
     parInfoEl.textContent = formatParInfo(data.par_length, data.start_target_similarity, data.threshold);
+    setInstantWinLock(isInstantWin(data.par_length, data.start_target_similarity, data.threshold));
   } catch (err) {
     statusEl.textContent = err.message;
   }
@@ -239,6 +253,8 @@ function showGame(startWord, targetWord, startTargetSimilarity, threshold, parLe
   thresholdSlider.disabled = false;
   thresholdInput.disabled = false;
   setDifficultyButtonsDisabled(false);
+
+  setInstantWinLock(isInstantWin(parLength, startTargetSimilarity, threshold));
 }
 
 document.getElementById("random-btn").addEventListener("click", async () => {

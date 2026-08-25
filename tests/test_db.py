@@ -266,7 +266,7 @@ def test_list_attempts_orders_most_recent_first(tiny_model):
     first.add_word("dog")
     save_attempt(conn, first)
 
-    second = Chain(tiny_model, start_word="car", target_word="dog", threshold=0.01)
+    second = Chain(tiny_model, start_word="car", target_word="dog", threshold=0.99)
     second.add_word("cat")
     save_attempt(conn, second)
 

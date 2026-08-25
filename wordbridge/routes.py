@@ -323,6 +323,15 @@ def hint():
     if chain.completed:
         return jsonify(error="This game is already complete. Start a new game instead."), 400
 
+    if chain.would_win_instantly():
+        # closest_unconnected_pair() finds nothing to bridge when start and
+        # target are already in the same component (there's no "other"
+        # component to reach) - _find_hint_word would crash trying to
+        # unpack that None. Same rejection add_word gives for this case.
+        return jsonify(
+            error="These words are already connected at this threshold - pick a harder setting first."
+        ), 400
+
     hint_word = _find_hint_word(chain, model, _new_deadline())
     if hint_word is None:
         return jsonify(
