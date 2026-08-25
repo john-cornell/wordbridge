@@ -55,6 +55,53 @@ function stopFireworks() {
   fireworks.stop(true);
 }
 
+let cryingConfettiInterval;
+let cryingConfettiTimeout;
+const cryingEmojiScalar = 4;
+
+function showCryingConfetti() {
+  if (typeof confetti === "undefined") return;
+
+  clearInterval(cryingConfettiInterval);
+  clearTimeout(cryingConfettiTimeout);
+
+  const cryingFace = confetti.shapeFromText({
+    text: "😭",
+    scalar: cryingEmojiScalar,
+  });
+
+  cryingConfettiInterval = setInterval(() => {
+    confetti({
+      particleCount: 2,
+      startVelocity: 0,
+      gravity: 0.25,
+      ticks: 500,
+      spread: 60,
+      drift: Math.random() - 0.5,
+      flat: true,
+      origin: {
+        x: Math.random(),
+        y: 0,
+      },
+      scalar: cryingEmojiScalar,
+      shapes: [cryingFace],
+    });
+  }, 200);
+
+  cryingConfettiTimeout = setTimeout(() => {
+    clearInterval(cryingConfettiInterval);
+  }, 4000);
+}
+
+function stopCryingConfetti() {
+  clearInterval(cryingConfettiInterval);
+  clearTimeout(cryingConfettiTimeout);
+
+  if (typeof confetti !== "undefined") {
+    confetti.reset();
+  }
+}
+
 const chainGraph = new ChainGraph(
   document.getElementById("chain-graph"),
   document.getElementById("graph-tooltip")
@@ -209,7 +256,11 @@ function applyMoveResult(data, messagePrefix) {
   setDifficultyButtonsDisabled(true);
 
   if (data.won) {
-    showFireworks();
+    if (data.score > 0) {
+      showFireworks();
+    } else {
+      showCryingConfetti();
+    }   
     chainGraph.highlightWinningConnection(data.winning_connection);
     const path = data.winning_connection
       .map((link) => `${link.a} —${link.similarity.toFixed(2)}→ ${link.b}`)
@@ -397,6 +448,7 @@ document.getElementById("restart-btn").addEventListener("click", async () => {
 
 document.getElementById("new-game-btn").addEventListener("click", () => {
   stopFireworks();
+  stopCryingConfetti();
 
   document.getElementById("word1-input").value = "";
   document.getElementById("word2-input").value = "";
