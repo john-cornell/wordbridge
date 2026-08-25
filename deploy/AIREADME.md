@@ -164,6 +164,16 @@ alias wblogs='sudo journalctl -u wordbridge -n 100 --no-pager'
 alias wbrestart='sudo systemctl restart wordbridge'
 alias wbstatus='sudo systemctl status wordbridge'
 alias wbtail='sudo journalctl -u wordbridge -f'
+
+# Function, not a plain alias, since it's a multi-step sequence - the
+# standard deploy+confirm block above, chained together.
+wbdeploy() {
+  cd /opt/wordbridge || return
+  sudo -u wordbridge git pull
+  sudo systemctl restart wordbridge
+  sleep 60
+  wbcheck
+}
 ```
 
 ## Keep this current when
