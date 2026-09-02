@@ -97,6 +97,7 @@ function renderScoresTable() {
 
     const score = document.createElement("td");
     score.textContent = entry.score;
+    score.classList.toggle("negative-score", entry.score < 0);
     row.appendChild(score);
 
     const threshold = document.createElement("td");

@@ -204,6 +204,7 @@ function formatScoreLine(data) {
 function applyMoveResult(data, messagePrefix) {
   chainGraph.addStep(data);
   scoreEl.textContent = formatScoreLine(data);
+  scoreEl.classList.toggle("negative-score", data.score < 0);
   thresholdSlider.disabled = true;
   thresholdInput.disabled = true;
   setDifficultyButtonsDisabled(true);
@@ -236,6 +237,7 @@ function showGame(startWord, targetWord, startTargetSimilarity, threshold, parLe
   targetWordEl.textContent = targetWord;
   chainGraph.reset(startWord, targetWord, startTargetSimilarity);
   scoreEl.textContent = "";
+  scoreEl.classList.remove("negative-score");
   parInfoEl.textContent = formatParInfo(parLength, startTargetSimilarity, threshold);
   statusEl.textContent = "";
   setupStatusEl.textContent = "";
