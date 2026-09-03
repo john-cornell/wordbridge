@@ -35,6 +35,16 @@ def test_index_page_hint_button_starts_disabled_until_a_word_is_selected(client)
     assert b'id="hint-instruction"' in response.data
 
 
+def test_hint_cost_is_described_in_effective_words_not_points(client):
+    # Hints cost effective words against par, not a literal point deduction -
+    # the copy must not claim otherwise (regression: it used to say "points"
+    # from a flat score subtraction that no longer exists).
+    app_js = client.get("/app.js")
+    assert b"extra effective" in app_js.data
+    assert b"cost} effective" in app_js.data
+    assert b"points" not in app_js.data
+
+
 def test_graph_js_supports_click_to_select_a_played_word(client):
     response = client.get("/graph.js")
     assert response.status_code == 200

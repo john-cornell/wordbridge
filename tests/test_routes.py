@@ -316,8 +316,8 @@ def test_hint_cost_peeks_without_charging_or_applying_anything(client):
     first_peek = client.get("/api/game/hint_cost").get_json()
     second_peek = client.get("/api/game/hint_cost").get_json()
 
-    assert first_peek == {"cost": 5}
-    assert second_peek == {"cost": 5}  # unchanged — peeking never charges
+    assert first_peek == {"cost": 2}
+    assert second_peek == {"cost": 2}  # unchanged — peeking never charges
 
     history_response = client.get("/api/history").get_json()
     assert history_response == {"attempts": []}
@@ -380,25 +380,25 @@ def test_hint_bridges_from_the_selected_word_toward_the_target_side(hint_chain_c
     # "bridge" joins beta's side without reaching delta yet - "gamma" (the
     # word that actually crosses over) is two hops away from beta.
     assert data["hint_word"] == "bridge"
-    assert data["cost"] == 5
+    assert data["cost"] == 2
     assert data["won"] is False
     # The hint is applied as a real move, not just suggested.
     assert data["word"] == "bridge"
 
 
-def test_hint_cost_doubles_and_a_second_hint_from_the_new_word_completes_the_bridge(hint_chain_client):
+def test_hint_cost_escalates_and_a_second_hint_from_the_new_word_completes_the_bridge(hint_chain_client):
     hint_chain_client.post("/api/game/new", json={"mode": "manual", "word1": "alpha", "word2": "delta"})
     hint_chain_client.post("/api/game/threshold", json={"threshold": 0.05})
     hint_chain_client.post("/api/game/word", json={"word": "beta"})
-    hint_chain_client.post("/api/game/hint", json={"word": "beta"})  # reveals bridge, cost 5
+    hint_chain_client.post("/api/game/hint", json={"word": "beta"})  # reveals bridge, cost 2
 
     peek = hint_chain_client.get("/api/game/hint_cost").get_json()
-    assert peek == {"cost": 10}
+    assert peek == {"cost": 4}
 
     second = hint_chain_client.post("/api/game/hint", json={"word": "bridge"}).get_json()
 
     assert second["hint_word"] == "gamma"
-    assert second["cost"] == 10
+    assert second["cost"] == 4
     assert second["won"] is True
 
 

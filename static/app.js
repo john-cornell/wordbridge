@@ -405,7 +405,8 @@ document.getElementById("hint-btn").addEventListener("click", async () => {
     return;
   }
 
-  const proceed = confirm(`Use a hint from '${selectedWord}' for ${costData.cost} points? It'll be added to your chain automatically.`);
+  const wordLabel = costData.cost === 1 ? "word" : "words";
+  const proceed = confirm(`Use a hint from '${selectedWord}'? It'll cost ${costData.cost} extra effective ${wordLabel} against par, and get added to your chain automatically.`);
   if (!proceed) return;
 
   const originalText = btn.textContent;
@@ -418,7 +419,7 @@ document.getElementById("hint-btn").addEventListener("click", async () => {
       btn.disabled = false;
       return;
     }
-    applyMoveResult(data, `Hint: '${data.hint_word}' (cost ${data.cost} points). `);
+    applyMoveResult(data, `Hint: '${data.hint_word}' (cost ${data.cost} effective ${data.cost === 1 ? "word" : "words"}). `);
     if (!data.won) btn.disabled = false;
   } catch (err) {
     statusEl.textContent = err.message;

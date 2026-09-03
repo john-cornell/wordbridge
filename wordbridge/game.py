@@ -228,21 +228,21 @@ class Chain:
             else estimated_par_for_threshold(self.threshold)
         )
 
-        # Each play costs one effective word, each digression one more, and
-        # each hint two more (a bigger crutch than wandering off-path).
+        # Each play costs one effective word and each digression one more.
+        # Hints cost effective words too, escalating each time (2, 4, 6...) -
+        # a bigger and bigger crutch the more you lean on them.
         # A score of 100 is par; beating it earns a compounding 20% bonus,
         # while going over loses 10 points per effective word.
         # Scores are intentionally uncapped, and negative scores are valid.
-        effective_words = (
-            len(self.steps) + self.num_digressions() + (2 * self.hints_used)
-        )
+        effective_words = len(self.steps) + self.num_digressions() + self.hint_cost_total
 
         if effective_words < par_length:
             return round(100 * (1.20 ** (par_length - effective_words)))
         return 100 - (10 * (effective_words - par_length))
 
     def next_hint_cost(self):
-        return 5 * (2 ** self.hints_used)
+        """Effective words the next hint will cost - escalates by 2 each time."""
+        return 2 * (self.hints_used + 1)
 
     def use_hint(self):
         cost = self.next_hint_cost()
