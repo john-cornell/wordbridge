@@ -196,27 +196,22 @@ class Chain:
             components.append(component)
         return components
 
-    def closest_unconnected_pair(self):
-        """Find the most promising bridge: the highest-similarity pair of known
-        words spanning the start's component or the target's component to
-        anything outside it. Returns (anchor, other)."""
-        components = self._components()
-        start_component = next(c for c in components if self.start_word in c)
-        target_component = next(c for c in components if self.target_word in c)
-        all_words = self._known_words()
+    def closest_known_word_on_other_side(self, selected_word):
+        """Given a word the player selected (must be one they've actually
+        played - not the start or target themselves), find the closest known
+        word that currently sits in a different connected component: the
+        natural word to bridge toward. Returns None if the selection is
+        already connected to every other known word."""
+        played_words = {step.word for step in self.steps}
+        if selected_word not in played_words:
+            raise ValueError(f"'{selected_word}' has not been played yet")
 
-        best_pair = None
-        best_similarity = None
-        for anchor_component in (start_component, target_component):
-            for anchor in anchor_component:
-                for other in all_words:
-                    if other in anchor_component:
-                        continue
-                    similarity = self._model.similarity(anchor, other)
-                    if best_similarity is None or similarity > best_similarity:
-                        best_similarity = similarity
-                        best_pair = (anchor, other)
-        return best_pair
+        components = self._components()
+        selected_component = next(c for c in components if selected_word in c)
+        other_words = [w for w in self._known_words() if w not in selected_component]
+        if not other_words:
+            return None
+        return max(other_words, key=lambda word: self._model.similarity(selected_word, word))
 
     def is_over_soft_cap(self):
         return len(self.steps) > self.soft_cap

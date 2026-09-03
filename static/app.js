@@ -7,6 +7,12 @@ const parInfoEl = document.getElementById("par-info");
 const statusEl = document.getElementById("status");
 const setupStatusEl = document.getElementById("setup-status");
 const fireworksOverlay = document.getElementById("fireworks-overlay");
+const hintInstructionEl = document.getElementById("hint-instruction");
+
+// Hints require the player to select a played word first - the graph's own
+// click state is the source of truth, but a completed game (won or given
+// up) must never let a stray node click re-enable the button.
+let gameActive = false;
 
 // Loaded from a CDN (see index.html) - if that request fails or is blocked
 // (firewall, ad-blocker, CDN outage), `Fireworks` is undefined. Guard it
@@ -107,6 +113,13 @@ const chainGraph = new ChainGraph(
   document.getElementById("graph-tooltip")
 );
 
+chainGraph.onSelectionChange = (selectedWord) => {
+  document.getElementById("hint-btn").disabled = !gameActive || !selectedWord;
+  hintInstructionEl.textContent = selectedWord
+    ? `Hint from '${selectedWord}'? Click Hint below (click the word again to change your mind).`
+    : "Click a word you've played above to get a hint from there.";
+};
+
 const thresholdSlider = document.getElementById("threshold-slider");
 const thresholdInput = document.getElementById("threshold-input");
 const difficultyButtons = document.querySelectorAll(".difficulty-btn");
@@ -133,7 +146,9 @@ function setInstantWinLock(locked) {
   // word that was always going to be rejected.
   document.getElementById("word-input").disabled = locked;
   document.getElementById("add-word-btn").disabled = locked;
-  document.getElementById("hint-btn").disabled = locked;
+  // Never force the hint button on here - it also requires a selected word,
+  // which is what chainGraph.onSelectionChange actually governs.
+  document.getElementById("hint-btn").disabled = locked || !chainGraph.getSelectedWord();
 }
 
 function formatParInfo(parLength, startTargetSimilarity, threshold) {
@@ -257,6 +272,7 @@ function applyMoveResult(data, messagePrefix) {
   setDifficultyButtonsDisabled(true);
 
   if (data.won) {
+    gameActive = false;
     if (data.score > 0) {
       showFireworks();
     } else {
@@ -284,6 +300,7 @@ function applyMoveResult(data, messagePrefix) {
 }
 
 function showGame(startWord, targetWord, startTargetSimilarity, threshold, parLength) {
+  gameActive = true;
   startWordEl.textContent = startWord;
   targetWordEl.textContent = targetWord;
   chainGraph.reset(startWord, targetWord, startTargetSimilarity);
@@ -294,7 +311,7 @@ function showGame(startWord, targetWord, startTargetSimilarity, threshold, parLe
   setupStatusEl.textContent = "";
   document.getElementById("word-input").disabled = false;
   document.getElementById("add-word-btn").disabled = false;
-  document.getElementById("hint-btn").disabled = false;
+  document.getElementById("hint-btn").disabled = true; // no word selected yet
   document.getElementById("give-up-btn").disabled = false;
   document.getElementById("restart-btn").hidden = false;
   setupSection.hidden = true;
@@ -374,6 +391,11 @@ document.getElementById("word-input").addEventListener("keydown", (evt) => {
 
 document.getElementById("hint-btn").addEventListener("click", async () => {
   const btn = document.getElementById("hint-btn");
+  const selectedWord = chainGraph.getSelectedWord();
+  if (!selectedWord) {
+    statusEl.textContent = "Click a word you've played first, then ask for a hint.";
+    return;
+  }
 
   let costData;
   try {
@@ -383,14 +405,14 @@ document.getElementById("hint-btn").addEventListener("click", async () => {
     return;
   }
 
-  const proceed = confirm(`Use a hint for ${costData.cost} points? It'll be added to your chain automatically.`);
+  const proceed = confirm(`Use a hint from '${selectedWord}' for ${costData.cost} points? It'll be added to your chain automatically.`);
   if (!proceed) return;
 
   const originalText = btn.textContent;
   btn.disabled = true;
   btn.textContent = "Thinking…";
   try {
-    const data = await postJSON("/api/game/hint");
+    const data = await postJSON("/api/game/hint", { word: selectedWord });
     if (data.hint_word === null) {
       statusEl.textContent = "No hint available from here.";
       btn.disabled = false;
@@ -413,6 +435,7 @@ document.getElementById("give-up-btn").addEventListener("click", async () => {
   btn.textContent = "Finding a route…";
   try {
     const data = await postJSON("/api/game/give_up");
+    gameActive = false;
     document.getElementById("word-input").disabled = true;
     document.getElementById("add-word-btn").disabled = true;
     document.getElementById("hint-btn").disabled = true;
@@ -449,6 +472,7 @@ document.getElementById("restart-btn").addEventListener("click", async () => {
 });
 
 document.getElementById("new-game-btn").addEventListener("click", () => {
+  gameActive = false;
   stopFireworks();
   stopCryingConfetti();
 

@@ -323,61 +323,83 @@ def test_hint_cost_peeks_without_charging_or_applying_anything(client):
     assert history_response == {"attempts": []}
 
 
-def test_hint_cost_reflects_escalating_price_after_a_real_hint(client):
+def test_hint_before_any_word_played_returns_error(client):
     client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
-    client.post("/api/game/threshold", json={"threshold": 0.11})
-    client.post("/api/game/hint")
-
-    peek = client.get("/api/game/hint_cost").get_json()
-    assert peek == {"cost": 10}
-
-
-def test_hint_never_suggests_a_word_already_on_the_board(client):
-    client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
-    client.post("/api/game/threshold", json={"threshold": 0.11})
-
-    first = client.post("/api/game/hint").get_json()
-    assert first["hint_word"] != "cat"
-
-    # Once played (by the first hint), it must not be suggested again.
-    second = client.post("/api/game/hint").get_json()
-    assert second["hint_word"] not in {"cat", first["hint_word"]}
-
-
-def test_hint_reveals_next_word_and_charges_five_points(client):
-    client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
-    # 0.11 sits between dog-auto (~0.1098, must stay disconnected) and
-    # dog-car (~0.1104, must connect) — the only threshold in this fixture
-    # where a genuine multi-hop route (cat->dog->car->auto) exists without
-    # an instant win via dog alone.
     client.post("/api/game/threshold", json={"threshold": 0.11})
 
     response = client.post("/api/game/hint")
+
+    assert response.status_code == 400
+    assert "Play a word first" in response.get_json()["error"]
+
+
+def test_hint_without_selecting_a_word_returns_error(client):
+    client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
+    client.post("/api/game/threshold", json={"threshold": 0.11})
+    client.post("/api/game/word", json={"word": "dog"})
+
+    response = client.post("/api/game/hint")
+
+    assert response.status_code == 400
+    assert "Select a word" in response.get_json()["error"]
+
+
+def test_hint_rejects_a_word_that_was_never_played(client):
+    client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
+    client.post("/api/game/threshold", json={"threshold": 0.11})
+    client.post("/api/game/word", json={"word": "dog"})
+
+    # "cat" is the start word, never something the player "played".
+    response = client.post("/api/game/hint", json={"word": "cat"})
+
+    assert response.status_code == 400
+    assert "has not been played yet" in response.get_json()["error"]
+
+
+def test_hint_never_suggests_an_already_used_word(hint_chain_client):
+    hint_chain_client.post("/api/game/new", json={"mode": "manual", "word1": "alpha", "word2": "delta"})
+    hint_chain_client.post("/api/game/threshold", json={"threshold": 0.05})
+    hint_chain_client.post("/api/game/word", json={"word": "beta"})
+
+    first = hint_chain_client.post("/api/game/hint", json={"word": "beta"}).get_json()
+    assert first["hint_word"] not in {"alpha", "beta", "delta"}
+
+    second = hint_chain_client.post("/api/game/hint", json={"word": first["hint_word"]}).get_json()
+    assert second["hint_word"] not in {"alpha", "beta", "delta", first["hint_word"]}
+
+
+def test_hint_bridges_from_the_selected_word_toward_the_target_side(hint_chain_client):
+    hint_chain_client.post("/api/game/new", json={"mode": "manual", "word1": "alpha", "word2": "delta"})
+    hint_chain_client.post("/api/game/threshold", json={"threshold": 0.05})
+    hint_chain_client.post("/api/game/word", json={"word": "beta"})
+
+    response = hint_chain_client.post("/api/game/hint", json={"word": "beta"})
     data = response.get_json()
 
     assert response.status_code == 200
-    # "dog" is the real first hop of the threshold-respecting route now —
-    # not "auto" (the old rank-only bug jumped straight to the literal
-    # target even though cat-auto has zero actual similarity).
-    assert data["hint_word"] == "dog"
+    # "bridge" joins beta's side without reaching delta yet - "gamma" (the
+    # word that actually crosses over) is two hops away from beta.
+    assert data["hint_word"] == "bridge"
     assert data["cost"] == 5
-    assert data["score"] == 100  # par 3 (cat->dog->car->auto): 1 step + 2 for the hint -> 100*3/3
+    assert data["won"] is False
     # The hint is applied as a real move, not just suggested.
-    assert data["word"] == "dog"
+    assert data["word"] == "bridge"
 
 
-def test_hint_cost_doubles_on_repeated_use(client):
-    client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
-    client.post("/api/game/threshold", json={"threshold": 0.11})
+def test_hint_cost_doubles_and_a_second_hint_from_the_new_word_completes_the_bridge(hint_chain_client):
+    hint_chain_client.post("/api/game/new", json={"mode": "manual", "word1": "alpha", "word2": "delta"})
+    hint_chain_client.post("/api/game/threshold", json={"threshold": 0.05})
+    hint_chain_client.post("/api/game/word", json={"word": "beta"})
+    hint_chain_client.post("/api/game/hint", json={"word": "beta"})  # reveals bridge, cost 5
 
-    first = client.post("/api/game/hint").get_json()
-    second = client.post("/api/game/hint").get_json()
+    peek = hint_chain_client.get("/api/game/hint_cost").get_json()
+    assert peek == {"cost": 10}
 
-    assert first["cost"] == 5
-    assert second["hint_word"] == "car"
+    second = hint_chain_client.post("/api/game/hint", json={"word": "bridge"}).get_json()
+
+    assert second["hint_word"] == "gamma"
     assert second["cost"] == 10
-    # par 3: effective_words = 2 steps + 0 digressions + 4 for two hints -> 3 over par
-    assert second["score"] == 70
+    assert second["won"] is True
 
 
 def test_hint_rejected_on_completed_chain(client):
@@ -582,7 +604,7 @@ def test_high_score_solution_marks_which_words_were_hints(client):
     client.post("/api/game/new", json={"mode": "manual", "word1": "cat", "word2": "auto"})
     client.post("/api/game/threshold", json={"threshold": 0.11})
     client.post("/api/game/word", json={"word": "dog"})
-    client.post("/api/game/hint")  # picks "car" and wins, per the bridge above
+    client.post("/api/game/hint", json={"word": "dog"})  # picks "car" and wins, per the bridge above
 
     attempt_id = client.get("/api/high_scores").get_json()["scores"][0]["id"]
     data = client.get(f"/api/high_scores/{attempt_id}/solution").get_json()

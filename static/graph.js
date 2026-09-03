@@ -31,6 +31,10 @@ class ChainGraph {
     this._nodesByWord = new Map();
     this._nextId = 1;
     this.dragNode = null;
+    this._mouseDownNode = null;
+    this._dragged = false;
+    this.selectedWord = null;
+    this.onSelectionChange = null;
 
     this._tick = this._tick.bind(this);
     requestAnimationFrame(this._tick);
@@ -50,6 +54,9 @@ class ChainGraph {
     this._nodesByWord.clear();
     this._nextId = 1;
     this.dragNode = null;
+    this._mouseDownNode = null;
+    this._dragged = false;
+    this._setSelectedWord(null);
     this._hideTooltip();
 
     const startWidth = this._measureNodeWidth(startWord);
@@ -73,6 +80,10 @@ class ChainGraph {
   }
 
   addStep(step) {
+    // The graph's shape just changed, so whatever was selected for a hint
+    // is stale - the player must pick again.
+    this._setSelectedWord(null);
+
     // Reuse an existing node instead of rendering duplicate words.
     const existingIds = this._nodesByWord.get(step.word);
     let node;
@@ -250,6 +261,7 @@ class ChainGraph {
     els.rect.classList.toggle("node-digression", node.isDigression);
     els.rect.classList.toggle("node-suggested", node.isSuggested);
     els.rect.classList.toggle("node-hint", node.isHint);
+    els.rect.classList.toggle("node-selected", Boolean(node.isSelected));
   }
 
   _createEdgeEl(edge) {
@@ -410,12 +422,15 @@ class ChainGraph {
     if (!g) return;
     const nodeId = Number(g.dataset.nodeId);
     const node = this._nodeById(nodeId);
-    if (!node || node.pinned) return;
-    this.dragNode = node;
+    if (!node) return;
+    this._mouseDownNode = node;
+    this._dragged = false;
+    if (!node.pinned) this.dragNode = node;
   }
 
   _onMouseMove(evt) {
     if (!this.dragNode) return;
+    this._dragged = true;
     const pt = this._svgPoint(evt);
     const halfWidth = this.dragNode.width / 2;
     this.dragNode.x = Math.max(halfWidth, Math.min(this.width - halfWidth, pt.x));
@@ -425,7 +440,37 @@ class ChainGraph {
   }
 
   _onMouseUp() {
+    // A mousedown+mouseup on the same node with no movement between them is
+    // a click (select this word for a hint), not a drag. Start/target nodes
+    // are pinned and never reach here as a drag, but shouldn't be selectable
+    // either - only words the player has actually played can anchor a hint.
+    if (!this._dragged && this._mouseDownNode && !this._mouseDownNode.pinned) {
+      this._toggleSelection(this._mouseDownNode);
+    }
     this.dragNode = null;
+    this._mouseDownNode = null;
+    this._dragged = false;
+  }
+
+  _toggleSelection(node) {
+    this._setSelectedWord(this.selectedWord === node.word ? null : node.word);
+  }
+
+  _setSelectedWord(word) {
+    if (this.selectedWord === word) return;
+    const previousWord = this.selectedWord;
+    this.selectedWord = word;
+    for (const node of this.nodes) {
+      if (node.word === previousWord || node.word === word) {
+        node.isSelected = node.word === word;
+        this._updateNodeAppearance(node);
+      }
+    }
+    if (this.onSelectionChange) this.onSelectionChange(this.selectedWord);
+  }
+
+  getSelectedWord() {
+    return this.selectedWord;
   }
 
   _showTooltip(node, evt) {

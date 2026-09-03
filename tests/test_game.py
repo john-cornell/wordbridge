@@ -41,18 +41,34 @@ def test_is_won_false_when_played_words_form_disconnected_islands(tiny_model):
     assert chain.is_won() is False
 
 
-def test_closest_unconnected_pair_with_no_steps_is_start_and_target(tiny_model):
+def test_closest_known_word_on_other_side_finds_the_other_component(tiny_model):
     chain = Chain(tiny_model, start_word="cat", target_word="auto", threshold=0.5)
-    assert chain.closest_unconnected_pair() == ("cat", "auto")
+    chain.add_word("dog")  # joins cat's component; auto is the only other known word
+    assert chain.closest_known_word_on_other_side("dog") == "auto"
 
 
-def test_closest_unconnected_pair_prefers_the_closest_cross_component_bridge(tiny_model):
-    # After "dog" (joins cat's component), the closest still-unconnected pair
-    # should be dog<->auto (0.11), not cat<->auto (0.0).
+def test_closest_known_word_on_other_side_picks_the_highest_similarity_candidate(tiny_model):
+    # dog joins cat's component, car joins auto's component. From dog, the
+    # closest known word on the other side is car (~0.11), not auto (~0.10).
     chain = Chain(tiny_model, start_word="cat", target_word="auto", threshold=0.5)
     chain.add_word("dog")
-    anchor, other = chain.closest_unconnected_pair()
-    assert {anchor, other} == {"dog", "auto"}
+    chain.add_word("car")
+    assert chain.closest_known_word_on_other_side("dog") == "car"
+
+
+def test_closest_known_word_on_other_side_rejects_a_word_that_was_not_played(tiny_model):
+    chain = Chain(tiny_model, start_word="cat", target_word="auto", threshold=0.5)
+    chain.add_word("dog")
+    with pytest.raises(ValueError):
+        chain.closest_known_word_on_other_side("cat")  # start word, never "played"
+
+
+def test_closest_known_word_on_other_side_returns_none_when_fully_connected(tiny_model):
+    # threshold=0.05: playing "dog" bridges cat's side to auto directly, so
+    # every known word ends up in one component - nothing left to bridge to.
+    chain = Chain(tiny_model, start_word="cat", target_word="auto", threshold=0.05)
+    chain.add_word("dog")
+    assert chain.closest_known_word_on_other_side("dog") is None
 
 
 def test_would_win_instantly_true_when_start_and_target_already_connected(tiny_model):
