@@ -210,8 +210,8 @@ def new_game():
                 break
         # If every reroll failed (or the wall-clock budget ran out first —
         # a hard backstop against ever repeating a runaway request), the
-        # last-rolled pair is kept and Chain.score() falls back to the
-        # legacy formula.
+        # last-rolled pair is kept and Chain.score() uses a threshold-based
+        # estimated par in place of a real solver par.
 
     par_length = len(solution_route) - 1 if solution_route is not None else None
 

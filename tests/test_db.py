@@ -135,15 +135,15 @@ def test_list_high_scores_orders_by_score_descending(tiny_model):
     low = Chain(tiny_model, start_word="cat", target_word="auto", threshold=0.5)
     low.add_word("dog")
     low.add_word("car")
-    save_attempt(conn, low)  # 2 steps, score 80
+    save_attempt(conn, low)  # estimated par 8, 2 effective words, score 299
 
     high = Chain(tiny_model, start_word="cat", target_word="auto", threshold=0.5)
     high.add_word("dog")
-    save_attempt(conn, high)  # 1 step, score 90
+    save_attempt(conn, high)  # estimated par 8, 1 effective word, score 358
 
     scores = list_high_scores(conn)
 
-    assert [entry["score"] for entry in scores] == [90, 80]
+    assert [entry["score"] for entry in scores] == [358, 299]
     assert scores[0]["start_word"] == "cat"
     assert scores[0]["target_word"] == "auto"
     assert scores[0]["threshold"] == 0.5

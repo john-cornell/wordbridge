@@ -1,6 +1,6 @@
 import pytest
 
-from wordbridge.game import Chain
+from wordbridge.game import Chain, Step, estimated_par_for_threshold
 
 
 def test_add_word_computes_similarities(tiny_model):
@@ -103,25 +103,34 @@ def test_winning_connection_returns_path_with_similarities(tiny_model):
     ]
 
 
-def test_score_scales_by_difficulty_multiplier(tiny_model):
-    # multiplier = threshold / 0.5 -> Normal (0.5) is 1x, Hard (0.7) is 1.4x, Easy (0.25) is 0.5x
-    easy = Chain(tiny_model, start_word="cat", target_word="auto", threshold=0.25)
-    normal = Chain(tiny_model, start_word="cat", target_word="auto", threshold=0.5)
-    hard = Chain(tiny_model, start_word="cat", target_word="auto", threshold=0.7)
-    for chain in (easy, normal, hard):
-        chain.add_word("dog")  # 1 step, 0 digressions, 0 hints -> raw score 90
-
-    assert easy.score() == 45
-    assert normal.score() == 90
-    assert hard.score() == 126
+@pytest.mark.parametrize(
+    ("threshold", "expected_par"),
+    [(0.1, 1), (0.2, 2), (0.3, 3), (0.4, 5), (0.5, 8), (0.6, 13), (0.8, 21)],
+)
+def test_estimated_par_matches_exact_anchors(threshold, expected_par):
+    assert estimated_par_for_threshold(threshold) == expected_par
 
 
-def test_score_penalizes_length_and_digressions(tiny_model):
-    chain = Chain(tiny_model, start_word="cat", target_word="auto", threshold=0.99)
-    chain.add_word("car")
-    chain.add_word("dog")  # digression, per test above
-    raw = 100 - (10 * 2) - (5 * 1)
-    assert chain.score() == round(raw * (0.99 / 0.5))  # threshold=0.99 -> 1.98x multiplier
+@pytest.mark.parametrize(("threshold", "expected_par"), [(0.53, 10), (0.7, 17)])
+def test_estimated_par_interpolates_custom_thresholds(threshold, expected_par):
+    assert estimated_par_for_threshold(threshold) == expected_par
+
+
+def test_estimated_par_clamps_thresholds_outside_anchor_range():
+    assert estimated_par_for_threshold(0) == 1
+    assert estimated_par_for_threshold(1) == 21
+
+
+def test_score_prefers_real_par_over_estimate(tiny_model):
+    chain = Chain(tiny_model, "cat", "auto", threshold=0.8, par_length=1)
+    chain.steps = [Step("played", 0, 0, False)]
+    assert chain.score() == 100
+
+
+def test_score_uses_estimated_par_when_real_par_is_unknown(tiny_model):
+    chain = Chain(tiny_model, "cat", "auto", threshold=0.53)
+    chain.steps = [Step("played", 0, 0, False)] * 10
+    assert chain.score() == 100
 
 
 def test_score_is_100_when_actual_words_match_par(tiny_model):
@@ -131,41 +140,32 @@ def test_score_is_100_when_actual_words_match_par(tiny_model):
     assert chain.score() == 100
 
 
-def test_score_drops_relative_to_par_as_extra_words_are_used(tiny_model):
-    chain = Chain(tiny_model, start_word="cat", target_word="auto", threshold=0.99, par_length=1)
-    chain.add_word("dog")
-    chain.add_word("car")  # 2 words used against a par of 1 -> 100*1/2
-    assert chain.score() == 50
+@pytest.mark.parametrize(
+    ("effective_words", "expected_score"),
+    [(4, 144), (5, 120), (6, 100), (7, 90), (11, 50), (16, 0), (18, -20)],
+)
+def test_score_is_exponential_below_par_and_linear_at_or_above_par(
+    tiny_model, effective_words, expected_score
+):
+    chain = Chain(tiny_model, "cat", "auto", par_length=6)
+    chain.steps = [Step("played", 0, 0, False)] * effective_words
+    assert chain.score() == expected_score
 
 
 def test_score_counts_a_digression_as_an_extra_effective_word(tiny_model):
     chain = Chain(tiny_model, start_word="cat", target_word="auto", threshold=0.99, par_length=1)
     chain.add_word("car")
     chain.add_word("dog")  # digression, per test above
-    # effective_words = 2 played + 1 digression penalty -> 100*1/3
-    assert chain.score() == round(100 * 1 / 3)
+    # effective_words = 2 played + 1 digression penalty: 2 over par.
+    assert chain.score() == 80
 
 
 def test_score_counts_a_hint_as_two_extra_effective_words(tiny_model):
     chain = Chain(tiny_model, start_word="cat", target_word="auto", par_length=1)  # default threshold=0.7
     chain.use_hint()
     chain.use_hint()
-    # no steps played, but effective_words = 2 hints * 2 -> 100*1/4
-    assert chain.score() == round(100 * 1 / 4)
-
-
-def test_score_falls_back_to_legacy_difficulty_formula_when_par_is_unknown(tiny_model):
-    # par_length defaults to None (e.g. the model couldn't find any route) —
-    # score() must not blow up, it falls back to the old absolute formula.
-    easy = Chain(tiny_model, start_word="cat", target_word="auto", threshold=0.25)
-    normal = Chain(tiny_model, start_word="cat", target_word="auto", threshold=0.5)
-    hard = Chain(tiny_model, start_word="cat", target_word="auto", threshold=0.7)
-    for chain in (easy, normal, hard):
-        chain.add_word("dog")  # 1 step, 0 digressions, 0 hints -> raw score 90
-
-    assert easy.score() == 45
-    assert normal.score() == 90
-    assert hard.score() == 126
+    # no steps played, but effective_words = 2 hints * 2: 3 over par.
+    assert chain.score() == 70
 
 
 def test_par_length_round_trips_through_to_dict_and_from_dict(tiny_model):
@@ -320,8 +320,9 @@ def test_use_hint_returns_cost_and_accumulates_into_score(tiny_model):
     chain = Chain(tiny_model, start_word="cat", target_word="auto")  # default threshold=0.7
     assert chain.use_hint() == 5
     assert chain.use_hint() == 10
-    raw = 100 - 15  # no steps/digressions yet, just hint cost
-    assert chain.score() == round(raw * (0.7 / 0.5))  # threshold=0.7 -> 1.4x multiplier
+    # Hint point costs are tracked for display/history, but scoring uses the
+    # existing two-effective-words-per-hint weighting. Estimated par at 0.7 is 17.
+    assert chain.score() == round(100 * (1.20 ** 13))
 
 
 def test_restart_resets_hint_state(tiny_model):

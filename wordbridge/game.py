@@ -1,6 +1,34 @@
 from dataclasses import dataclass, field
 
 
+# Fibonacci-inspired fallback pars. Exact anchors are preserved; custom
+# thresholds are linearly interpolated between their surrounding anchors.
+_PAR_ANCHORS = (
+    (0.1, 1),
+    (0.2, 2),
+    (0.3, 3),
+    (0.4, 5),
+    (0.5, 8),
+    (0.6, 13),
+    (0.8, 21),
+)
+
+
+def estimated_par_for_threshold(threshold):
+    """Estimate par from the threshold, clamping outside the anchor range."""
+    if threshold <= _PAR_ANCHORS[0][0]:
+        return _PAR_ANCHORS[0][1]
+    if threshold >= _PAR_ANCHORS[-1][0]:
+        return _PAR_ANCHORS[-1][1]
+
+    for (lower_threshold, lower_par), (upper_threshold, upper_par) in zip(
+        _PAR_ANCHORS, _PAR_ANCHORS[1:]
+    ):
+        if threshold <= upper_threshold:
+            proportion = (threshold - lower_threshold) / (upper_threshold - lower_threshold)
+            return round(lower_par + proportion * (upper_par - lower_par))
+
+
 @dataclass
 class Step:
     word: str
@@ -197,21 +225,27 @@ class Chain:
         return sum(1 for step in self.steps if step.is_digression)
 
     def score(self):
-        if self.par_length is None:
-            # No par could be established for this puzzle (e.g. the model
-            # couldn't find any route within search limits) — fall back to
-            # the old absolute formula rather than leave the game unscored.
-            raw = 100 - (10 * len(self.steps)) - (5 * self.num_digressions()) - self.hint_cost_total
-            difficulty_multiplier = self.threshold / 0.5
-            return round(raw * difficulty_multiplier)
+        # Prefer the solver's real par. If its bounded search found no route,
+        # estimate one from the threshold anchors (interpolating custom values).
+        par_length = (
+            self.par_length
+            if self.par_length is not None
+            else estimated_par_for_threshold(self.threshold)
+        )
 
-        # Par-relative scoring: a digression still counts as a played word,
-        # plus a 1-word penalty for the detour; a hint costs 2 effective
-        # words since it's a bigger crutch than just wandering off-path.
-        effective_words = len(self.steps) + self.num_digressions() + (2 * self.hints_used)
-        if effective_words <= 0:
-            return 100
-        return min(100, round(100 * self.par_length / effective_words))
+        # Each play costs one effective word and each digression one more.
+        # A score of 100 is par; beating it earns a compounding 20% bonus,
+        # while going over loses 10 points per effective word. Hint costs are
+        # deducted separately from the resulting score.
+        # Scores are intentionally uncapped, and negative scores are valid.
+        effective_words = len(self.steps) + self.num_digressions()
+
+        if effective_words < par_length:
+            score = round(100 * (1.20 ** (par_length - effective_words)))
+        else:
+            score = 100 - (10 * (effective_words - par_length))
+
+        return score - self.hint_cost_total
 
     def next_hint_cost(self):
         return 5 * (2 ** self.hints_used)

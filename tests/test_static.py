@@ -54,6 +54,17 @@ def test_graph_js_served(client):
     assert b"class ChainGraph" in response.data
 
 
+def test_negative_scores_are_styled_red(client):
+    app_js = client.get("/app.js")
+    scores_js = client.get("/scores.js")
+    style_css = client.get("/style.css")
+
+    assert b'classList.toggle("negative-score", data.score < 0)' in app_js.data
+    assert b'classList.toggle("negative-score", entry.score < 0)' in scores_js.data
+    assert b".negative-score" in style_css.data
+    assert b"color: var(--danger)" in style_css.data
+
+
 def test_scores_page_served(client):
     response = client.get("/scores")
     assert response.status_code == 200

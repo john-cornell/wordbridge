@@ -162,7 +162,7 @@ def test_add_word_progresses_chain_and_persists_on_win(client):
 
     assert response.status_code == 200
     assert data["won"] is True
-    assert data["score"] == 100  # par 1, 1 word used, no digressions/hints -> 100*1/1
+    assert data["score"] == 120  # real solver par 2, one effective word -> 1 under par
     assert data["winning_connection"] == [
         {"a": "cat", "b": "dog", "similarity": pytest.approx(0.9939, abs=0.001)},
         {"a": "dog", "b": "auto", "similarity": pytest.approx(0.1098, abs=0.001)},
@@ -376,8 +376,8 @@ def test_hint_cost_doubles_on_repeated_use(client):
     assert first["cost"] == 5
     assert second["hint_word"] == "car"
     assert second["cost"] == 10
-    # par 3: effective_words = 2 steps + 0 digressions + 4 for two hints -> 100*3/6
-    assert second["score"] == 50
+    # par 3: effective_words = 2 steps + 0 digressions + 4 for two hints -> 3 over par
+    assert second["score"] == 70
 
 
 def test_hint_rejected_on_completed_chain(client):
@@ -518,7 +518,7 @@ def test_high_scores_includes_win_with_source_dest_score_and_date(client):
     entry = data["scores"][0]
     assert entry["start_word"] == "cat"
     assert entry["target_word"] == "auto"
-    assert entry["score"] == 100  # par 1, 1 word used, no digressions/hints -> 100*1/1
+    assert entry["score"] == 120  # real solver par 2, one effective word -> 1 under par
     assert "created_at" in entry
     assert entry["player_name"] is None
 
