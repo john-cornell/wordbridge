@@ -261,7 +261,7 @@ function applyMoveResult(data, messagePrefix) {
       showFireworks();
     } else {
       showCryingConfetti();
-    }   
+    }
     chainGraph.highlightWinningConnection(data.winning_connection);
     const path = data.winning_connection
       .map((link) => `${link.a} —${link.similarity.toFixed(2)}→ ${link.b}`)

@@ -39,6 +39,23 @@ def test_index_page_pins_fireworks_cdn_script_with_integrity(client):
     assert b'id="fireworks-overlay"' in response.data
 
 
+def test_index_page_pins_confetti_cdn_script_with_integrity(client):
+    # Same rule as fireworks-js: pinned exact version, integrity + crossorigin
+    # always present so a tampered/failed CDN response can't run silently.
+    response = client.get("/")
+    assert response.status_code == 200
+    assert b"canvas-confetti@1." in response.data
+    assert b"canvas-confetti@1.x" not in response.data
+    assert response.data.count(b'integrity="sha384-') == 2
+    assert response.data.count(b'crossorigin="anonymous"') == 2
+
+
+def test_crying_confetti_guards_against_missing_cdn_global(client):
+    app_js = client.get("/app.js")
+    assert b'typeof confetti === "undefined"' in app_js.data
+    assert b'typeof confetti !== "undefined"' in app_js.data
+
+
 def test_index_page_includes_difficulty_buttons(client):
     response = client.get("/")
     assert response.status_code == 200

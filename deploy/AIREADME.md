@@ -31,6 +31,23 @@ taking down the entire page over a purely cosmetic feature. Bump both the
 version in the `src` URL and the `integrity` hash together if upgrading;
 jsdelivr publishes hashes at `https://data.jsdelivr.com/v1/packages/npm/fireworks-js@<version>?structure=flat`.
 
+## Known gotcha: canvas-confetti's pinned URL is jsdelivr auto-minified, not a published file
+
+`index.html` also loads `canvas-confetti` from `cdn.jsdelivr.net` (crying-face
+confetti on a loss, same guard pattern as fireworks:
+`typeof confetti === "undefined"`). Unlike `fireworks-js`, the npm package
+for `canvas-confetti` does **not** ship a `dist/confetti.browser.min.js`
+file — only `dist/confetti.browser.js` (unminified). The pinned `.min.js`
+URL still resolves (HTTP 200) because jsdelivr auto-minifies on the fly for
+any npm file requested with a `.min.js` suffix that doesn't exist verbatim.
+That means jsdelivr's own hash-lookup API
+(`https://data.jsdelivr.com/v1/packages/npm/canvas-confetti@<version>?structure=flat`)
+**will not list this file or its hash** — if you bump the version, you must
+download the exact pinned URL directly and compute the SRI hash from those
+bytes yourself (`openssl dgst -sha384 -binary <file> | openssl base64 -A`),
+the same as was done to pin it originally. Don't trust a hash you didn't
+compute from the exact URL being served.
+
 ## Not needed on the server (harmless, just along for the ride via git clone)
 
 - `tests/`, `scripts/`, `pytest.ini` — dev/CI only.
