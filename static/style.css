@@ -92,6 +92,12 @@ h1 {
   margin: 0 0 1rem;
 }
 
+.hint-instruction {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin: 0.25rem 0 1rem;
+}
+
 .row {
   display: flex;
   flex-wrap: wrap;
@@ -316,6 +322,12 @@ h1 {
   stroke: #8b5cf6;
   stroke-width: 3;
   stroke-dasharray: 4, 2;
+}
+
+/* Also layers on top - the word the player picked to hint from. */
+.node rect.node-selected {
+  stroke: #facc15;
+  stroke-width: 4;
 }
 
 .node text {

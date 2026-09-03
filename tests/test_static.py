@@ -26,6 +26,22 @@ def test_index_page_includes_hint_button(client):
     assert b'id="hint-btn"' in response.data
 
 
+def test_index_page_hint_button_starts_disabled_until_a_word_is_selected(client):
+    # Hints are now anchored to a word the player clicks in the graph - the
+    # button must start disabled since nothing is selected on page load.
+    response = client.get("/")
+    assert response.status_code == 200
+    assert b'id="hint-btn" class="btn btn-outline" disabled' in response.data
+    assert b'id="hint-instruction"' in response.data
+
+
+def test_graph_js_supports_click_to_select_a_played_word(client):
+    response = client.get("/graph.js")
+    assert response.status_code == 200
+    assert b"getSelectedWord" in response.data
+    assert b"onSelectionChange" in response.data
+
+
 def test_index_page_pins_fireworks_cdn_script_with_integrity(client):
     # Must stay pinned to an exact version with a matching integrity hash -
     # never a floating range like "@2.x", and never without integrity/

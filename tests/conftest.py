@@ -61,3 +61,33 @@ def big_vocab_app(big_vocab_model):
 @pytest.fixture
 def big_vocab_client(big_vocab_app):
     return big_vocab_app.test_client()
+
+
+@pytest.fixture
+def hint_chain_model():
+    # tiny_model's 4 real words don't leave room for a hint that bridges
+    # without immediately winning (there's only one word left to suggest).
+    # This fixture adds two intermediate words so a real hint sequence needs
+    # two hints: the first ("bridge") joins the start's side without
+    # reaching the target, the second ("gamma") completes the connection.
+    kv = KeyedVectors(vector_size=4)
+    words = ["alpha", "beta", "bridge", "gamma", "delta"]
+    vectors = np.array([
+        [1.0, 0.0, 0.0, 0.0],      # alpha (start)
+        [0.95, 0.1, 0.0, 0.015],   # beta - close to alpha, played manually first
+        [0.85, 0.3, 0.1, 0.035],   # bridge - close to beta, still below win_threshold to delta
+        [0.0, 0.1, 0.3, 0.85],     # gamma - weakly close to bridge, close to delta
+        [0.0, 0.0, 0.0, 1.0],      # delta (target)
+    ])
+    kv.add_vectors(words, vectors)
+    return WordVectorModel(kv, vocab_limit=10)
+
+
+@pytest.fixture
+def hint_chain_app(hint_chain_model):
+    return create_app(vector_model=hint_chain_model, db_path=":memory:", secret_key="test-secret")
+
+
+@pytest.fixture
+def hint_chain_client(hint_chain_app):
+    return hint_chain_app.test_client()

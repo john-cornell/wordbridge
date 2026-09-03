@@ -60,44 +60,14 @@ def _new_deadline():
     return time.monotonic() + _SEARCH_DEADLINE_SECONDS
 
 
-def _find_hint_word(chain, model, deadline):
-    """Pick a single next word that makes real progress: bridge the closest
-    not-yet-connected pair of known points (from either the start's side or
-    the target's side), falling back to searching straight toward the target."""
+def _find_hint_word(chain, model, deadline, anchor, other):
+    """Pick a single next word that bridges the player's selected word
+    (anchor) toward the closest known word on the other side."""
     exclude = _already_used_words(chain)
-    anchor, other = chain.closest_unconnected_pair()
-
     bridge = model.find_route(
         anchor, other, exclude=exclude, win_threshold=chain.threshold, deadline=deadline, **_SEARCH_PARAMS
     )
-    if bridge is not None:
-        return bridge[0]
-
-    current_word = chain.steps[-1].word if chain.steps else chain.start_word
-    continuation = model.find_route(
-        current_word,
-        chain.target_word,
-        exclude=exclude,
-        win_threshold=chain.threshold,
-        deadline=deadline,
-        **_SEARCH_PARAMS,
-    )
-    if continuation is not None:
-        return continuation[0]
-
-    if current_word != chain.start_word:
-        fresh = model.find_route(
-            chain.start_word,
-            chain.target_word,
-            exclude=exclude,
-            win_threshold=chain.threshold,
-            deadline=deadline,
-            **_SEARCH_PARAMS,
-        )
-        if fresh is not None:
-            return fresh[0]
-
-    return None
+    return bridge[0] if bridge is not None else None
 
 
 def _compute_solution_route(model, start_word, target_word, threshold, deadline):
@@ -324,15 +294,34 @@ def hint():
         return jsonify(error="This game is already complete. Start a new game instead."), 400
 
     if chain.would_win_instantly():
-        # closest_unconnected_pair() finds nothing to bridge when start and
-        # target are already in the same component (there's no "other"
-        # component to reach) - _find_hint_word would crash trying to
-        # unpack that None. Same rejection add_word gives for this case.
+        # Same rejection add_word gives for this case.
         return jsonify(
             error="These words are already connected at this threshold - pick a harder setting first."
         ), 400
 
-    hint_word = _find_hint_word(chain, model, _new_deadline())
+    if not chain.steps:
+        return jsonify(error="Play a word first, then select it to get a hint from there."), 400
+
+    payload = request.get_json(silent=True) or {}
+    selected_word = payload.get("word")
+    if not selected_word:
+        return jsonify(error="Select a word you've played, then ask for a hint."), 400
+
+    try:
+        other_side_word = chain.closest_known_word_on_other_side(selected_word)
+    except ValueError as err:
+        return jsonify(error=str(err)), 400
+
+    if other_side_word is None:
+        return jsonify(
+            hint_word=None,
+            cost=0,
+            score=chain.score(),
+            par_length=chain.par_length,
+            words_used=len(chain.steps),
+        )
+
+    hint_word = _find_hint_word(chain, model, _new_deadline(), selected_word, other_side_word)
     if hint_word is None:
         return jsonify(
             hint_word=None,
