@@ -176,12 +176,12 @@ def test_score_counts_a_digression_as_an_extra_effective_word(tiny_model):
     assert chain.score() == 80
 
 
-def test_score_counts_a_hint_as_two_extra_effective_words(tiny_model):
+def test_score_counts_hints_at_their_escalating_effective_word_cost(tiny_model):
     chain = Chain(tiny_model, start_word="cat", target_word="auto", par_length=1)  # default threshold=0.7
-    chain.use_hint()
-    chain.use_hint()
-    # no steps played, but effective_words = 2 hints * 2: 3 over par.
-    assert chain.score() == 70
+    chain.use_hint()  # costs 2 effective words
+    chain.use_hint()  # costs 4 more
+    # no steps played, but effective_words = 2 + 4 = 6: 5 over par.
+    assert chain.score() == 50
 
 
 def test_par_length_round_trips_through_to_dict_and_from_dict(tiny_model):
@@ -321,24 +321,24 @@ def test_add_word_rejects_target_word(tiny_model):
         chain.add_word("auto")
 
 
-def test_next_hint_cost_starts_at_five_and_doubles(tiny_model):
+def test_next_hint_cost_starts_at_two_and_escalates_by_two(tiny_model):
     chain = Chain(tiny_model, start_word="cat", target_word="auto")
-    assert chain.next_hint_cost() == 5
+    assert chain.next_hint_cost() == 2
     chain.use_hint()
-    assert chain.next_hint_cost() == 10
+    assert chain.next_hint_cost() == 4
     chain.use_hint()
-    assert chain.next_hint_cost() == 20
+    assert chain.next_hint_cost() == 6
     chain.use_hint()
-    assert chain.next_hint_cost() == 40
+    assert chain.next_hint_cost() == 8
 
 
 def test_use_hint_returns_cost_and_accumulates_into_score(tiny_model):
     chain = Chain(tiny_model, start_word="cat", target_word="auto")  # default threshold=0.7
-    assert chain.use_hint() == 5
-    assert chain.use_hint() == 10
-    # Hint point costs are tracked for display/history, but scoring uses the
-    # existing two-effective-words-per-hint weighting. Estimated par at 0.7 is 17.
-    assert chain.score() == round(100 * (1.20 ** 13))
+    assert chain.use_hint() == 2
+    assert chain.use_hint() == 4
+    # hint_cost_total (2+4=6 effective words) feeds straight into score()'s
+    # effective_words. Estimated par at 0.7 is 17.
+    assert chain.score() == round(100 * (1.20 ** 11))
 
 
 def test_restart_resets_hint_state(tiny_model):
@@ -347,4 +347,4 @@ def test_restart_resets_hint_state(tiny_model):
     chain.restart()
     assert chain.hints_used == 0
     assert chain.hint_cost_total == 0
-    assert chain.next_hint_cost() == 5
+    assert chain.next_hint_cost() == 2
