@@ -97,6 +97,7 @@ def _apply_step_and_check_win(chain, step, conn):
         chain.mark_won()
     return {
         "word": step.word,
+        "previous_word": step.previous_word,
         "neighbor_similarity": step.neighbor_similarity,
         "target_similarity": step.target_similarity,
         "is_digression": step.is_digression,
@@ -444,6 +445,7 @@ def high_score_solution(attempt_id):
         steps=[
             {
                 "word": step.word,
+                "previous_word": step.previous_word,
                 "neighbor_similarity": step.neighbor_similarity,
                 "target_similarity": step.target_similarity,
                 "is_digression": step.is_digression,

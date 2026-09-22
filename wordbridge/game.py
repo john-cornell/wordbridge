@@ -36,6 +36,7 @@ class Step:
     target_similarity: float
     is_digression: bool
     is_hint: bool = False
+    previous_word: str = None
     similarities: list = field(default_factory=list)
 
 
@@ -104,7 +105,15 @@ class Chain:
             for other in other_words
         ]
 
-        step = Step(word, neighbor_similarity, target_similarity, is_digression, is_hint, similarities)
+        step = Step(
+            word,
+            neighbor_similarity,
+            target_similarity,
+            is_digression,
+            is_hint=is_hint,
+            previous_word=previous_word,
+            similarities=similarities,
+        )
         self.steps.append(step)
         return step
 
