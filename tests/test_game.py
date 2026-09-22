@@ -7,8 +7,16 @@ def test_add_word_computes_similarities(tiny_model):
     chain = Chain(tiny_model, start_word="cat", target_word="auto", threshold=0.99)
     step = chain.add_word("dog")
     assert step.word == "dog"
+    assert step.previous_word == "cat"
     assert step.neighbor_similarity == pytest.approx(tiny_model.similarity("dog", "cat"))
     assert step.target_similarity == pytest.approx(tiny_model.similarity("dog", "auto"))
+
+
+def test_add_word_records_the_actual_previous_step_as_previous_word(tiny_model):
+    chain = Chain(tiny_model, start_word="cat", target_word="auto", threshold=0.05)
+    chain.add_word("dog")  # previous_word is the start word here
+    step = chain.add_word("car")  # previous_word is now "dog", not the start
+    assert step.previous_word == "dog"
 
 
 def test_digression_detected_when_target_similarity_drops(tiny_model):

@@ -97,6 +97,17 @@ def test_graph_js_served(client):
     assert b"class ChainGraph" in response.data
 
 
+def test_graph_js_tooltip_names_the_actual_words_being_compared(client):
+    # Regression: "neighbor 0.35, target 0.20" was confusing since "neighbor"
+    # actually meant "the word played right before this one", not a general
+    # nearest-neighbor concept. The tooltip must name the real words instead.
+    response = client.get("/graph.js")
+    assert response.status_code == 200
+    assert b"similar to ${previousLabel}" in response.data
+    assert b"similar to ${targetLabel}" in response.data
+    assert b"neighbor ${node.neighborSimilarity" not in response.data
+
+
 def test_negative_scores_are_styled_red(client):
     app_js = client.get("/app.js")
     scores_js = client.get("/scores.js")

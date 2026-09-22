@@ -266,6 +266,9 @@ def test_add_word_response_includes_similarities_to_other_chain_words(client):
     words_compared = {entry["word"] for entry in data["similarities"]}
     assert words_compared == {"cat", "auto", "dog"}
 
+    # "car" was played right after "dog" - that's what the tooltip names.
+    assert data["previous_word"] == "dog"
+
     # "car" only connects to "auto" here (an island) — not a win, so no connection.
     assert data["won"] is False
     assert data["winning_connection"] is None
@@ -611,6 +614,9 @@ def test_high_score_solution_marks_which_words_were_hints(client):
 
     is_hint_by_word = {step["word"]: step["is_hint"] for step in data["steps"]}
     assert is_hint_by_word == {"dog": False, "car": True}
+
+    previous_word_by_word = {step["word"]: step["previous_word"] for step in data["steps"]}
+    assert previous_word_by_word == {"dog": "cat", "car": "dog"}
 
 
 def test_high_score_solution_returns_404_for_unknown_id(client):

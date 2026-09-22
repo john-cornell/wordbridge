@@ -45,6 +45,7 @@ class ChainGraph {
   }
 
   reset(startWord, targetWord, startTargetSimilarity) {
+    this.targetWord = targetWord;
     this.svg.innerHTML = "";
     this.nodeEls.clear();
     this.edgeEls.clear();
@@ -89,6 +90,7 @@ class ChainGraph {
     let node;
     if (existingIds && existingIds.length) {
       node = this._nodeById(existingIds[existingIds.length - 1]);
+      node.previousWord = step.previous_word;
       node.neighborSimilarity = step.neighbor_similarity;
       node.targetSimilarity = step.target_similarity;
       node.isDigression = step.is_digression;
@@ -103,6 +105,7 @@ class ChainGraph {
       const y = Math.max(NODE_HEIGHT / 2, Math.min(this.height - NODE_HEIGHT / 2, rawY));
 
       node = this._makeNode(step.word, x, y, false);
+      node.previousWord = step.previous_word;
       node.neighborSimilarity = step.neighbor_similarity;
       node.targetSimilarity = step.target_similarity;
       node.isDigression = step.is_digression;
@@ -475,9 +478,16 @@ class ChainGraph {
 
   _showTooltip(node, evt) {
     const hintSuffix = node.isHint ? " (hint)" : "";
-    const text = node.neighborSimilarity === null
-      ? `${node.word}${hintSuffix}`
-      : `${node.word}${hintSuffix}: neighbor ${node.neighborSimilarity.toFixed(2)}, target ${node.targetSimilarity.toFixed(2)}`;
+    let text = `${node.word}${hintSuffix}`;
+    if (node.neighborSimilarity !== null && node.neighborSimilarity !== undefined) {
+      // Name the actual words being compared instead of the generic
+      // "neighbor"/"target" labels - those were confusing on their own
+      // since "neighbor" here means "the word played right before this
+      // one", not a general nearest-neighbor concept.
+      const previousLabel = node.previousWord ? `'${node.previousWord}'` : "the previous word";
+      const targetLabel = this.targetWord ? `'${this.targetWord}'` : "the target";
+      text += `: ${node.neighborSimilarity.toFixed(2)} similar to ${previousLabel}, ${node.targetSimilarity.toFixed(2)} similar to ${targetLabel}`;
+    }
     this.tooltip.textContent = text;
     this.tooltip.hidden = false;
     this._positionTooltip(evt);
